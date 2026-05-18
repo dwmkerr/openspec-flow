@@ -16,3 +16,6 @@ private-key.pem
 
 # Probot dev
 .smee-url
+
+# Playwright MCP cache
+.playwright-mcp/

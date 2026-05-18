@@ -105,12 +105,14 @@ LOG_LEVEL=debug
 In your sandbox repo, create the labels the bot reacts to:
 
 ```bash
-REPO=dwmkerr/openspec-flow   # or your repo
+cd /Users/Dave_Kerr/repos/scratch/openspec-flow   # or your repo's working dir
 
-gh label create openspec:go   -R $REPO -c "#0969da" -d "Trigger: start or re-run openspec-flow"
-gh label create openspec:spec -R $REPO -c "#8250df" -d "Spec PR raised by openspec-flow"
-gh label create openspec:impl -R $REPO -c "#1a7f37" -d "Implementation PR raised by openspec-flow"
+gh label create "openspec:go"   -c "0969da" -d "Trigger: start or re-run openspec-flow" -f
+gh label create "openspec:spec" -c "8250df" -d "Spec PR raised by openspec-flow"        -f
+gh label create "openspec:impl" -c "1a7f37" -d "Implementation PR raised by openspec-flow" -f
 ```
+
+`gh` picks up the repo from the current working directory. `-f` forces update if the label already exists. Color codes are hex without the `#`.
 
 ## Step 6 — verify
 
