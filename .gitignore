@@ -1,0 +1,18 @@
+scratch/
+node_modules/
+dist/
+coverage/
+
+# Secrets — never commit
+.env
+.env.local
+private-key.pem
+*.pem
+
+# Editors
+.vscode/
+.idea/
+.DS_Store
+
+# Probot dev
+.smee-url

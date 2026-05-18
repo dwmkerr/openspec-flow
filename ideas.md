@@ -1,0 +1,3 @@
+- [ ] learn and improve flow: reviews an openspec flow and suggests improvements to skills/agents/etc
+- [ ] zero shot issues
+- [ ] chain spec/impl prs

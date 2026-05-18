@@ -1,0 +1,65 @@
+{
+  "name": "@dwmkerr/openspec-flow",
+  "version": "0.0.0",
+  "description": "Drive OpenSpec spec-driven development from GitHub issues. Open the issue, get a spec PR. Merge it, get an implementation PR.",
+  "license": "MIT",
+  "private": false,
+  "type": "commonjs",
+  "main": "./dist/index.js",
+  "files": [
+    "dist",
+    "public",
+    ".github/actions",
+    ".github/workflows/openspec-flow.yml"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc -w",
+    "dev": "tsx watch src/index.ts",
+    "dev:tunnel:smee": "smee -u $(cat .smee-url 2>/dev/null || echo 'https://smee.io/REPLACE-ME') --path /api/github/webhooks --port 3000",
+    "dev:tunnel:ngrok": "ngrok http 3000",
+    "start": "node dist/index.js",
+    "lint": "eslint .",
+    "lint:fix": "eslint --fix .",
+    "test": "jest --no-coverage --testPathIgnorePatterns=integration",
+    "test:watch": "jest --watch --no-coverage --testPathIgnorePatterns=integration",
+    "test:integration": "jest --no-coverage --forceExit --testPathPatterns=integration",
+    "test:all": "jest --no-coverage",
+    "test:cov": "jest --coverage --testPathIgnorePatterns=integration",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@octokit/webhooks-types": "^7.6.1",
+    "probot": "^13.4.4"
+  },
+  "devDependencies": {
+    "@octokit/webhooks-examples": "^7.6.1",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.10.0",
+    "jest": "^30.0.0",
+    "nock": "^14.0.0",
+    "smee-client": "^4.3.1",
+    "ts-jest": "^29.2.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dwmkerr/openspec-flow.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dwmkerr/openspec-flow/issues"
+  },
+  "homepage": "https://github.com/dwmkerr/openspec-flow#readme",
+  "keywords": [
+    "openspec",
+    "spec-driven",
+    "github-bot",
+    "claude",
+    "agent",
+    "probot"
+  ]
+}

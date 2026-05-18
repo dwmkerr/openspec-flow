@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>OpenSpec Flow</title>
+<style>
+  :root {
+    --bg: #fafbfc;
+    --card: #ffffff;
+    --border: #d6dae0;
+    --border-muted: #eaecef;
+    --text: #1f2328;
+    --text-muted: #59636e;
+    --text-subtle: #6e7781;
+    --text-tertiary: #8c959f;
+    --accent-blue: #0969da;
+    --accent-purple: #8250df;
+    --accent-green: #1a7f37;
+    --merge-green: #2da44e;
+    --merge-green-hover: #2c974b;
+    --merge-green-border: rgba(31,35,40,0.15);
+    --label-yellow-bg: #fbca04;
+    --label-yellow-text: #1f2328;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* Outer stage */
+  .stage {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 56px;
+  }
+
+  /* Triptych grid */
+  .triptych {
+    display: grid;
+    grid-template-columns: 1fr 28px 1fr 28px 1fr;
+    column-gap: 18px;
+    width: 100%;
+    max-width: 1280px;
+    align-items: stretch;
+  }
+  .panel {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    min-height: 0;
+  }
+
+  /* Hero placard */
+  .placard {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 0 4px 2px;
+  }
+  .headline {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.4px;
+    line-height: 1.15;
+    color: var(--text);
+    margin: 0;
+  }
+  .headline.col-blue   { color: #0969da; }
+  .headline.col-purple { color: #8250df; }
+  .headline.col-green  { color: #1a7f37; }
+
+  .subtitle {
+    font-size: 14.5px;
+    color: var(--text-muted);
+    font-weight: 400;
+    line-height: 1.45;
+    margin: 0;
+  }
+  .subtitle .inline-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #0969da;
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    border: 1px solid rgba(0,0,0,0.08);
+    vertical-align: middle;
+    line-height: 1;
+  }
+
+  /* Chevron in gutter */
+  .chevron {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-tertiary);
+    padding-top: 64px;
+  }
+
+  /* Card — consistent height across all 3 columns */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+    height: 54vh;
+    min-height: 440px;
+    max-height: 560px;
+    box-shadow:
+      0 1px 2px rgba(15, 23, 42, 0.06),
+      0 8px 24px rgba(15, 23, 42, 0.08);
+    transition: transform 180ms ease, box-shadow 180ms ease;
+  }
+  .card:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 2px 4px rgba(15, 23, 42, 0.07),
+      0 14px 32px rgba(15, 23, 42, 0.11);
+  }
+
+  .card-header {
+    padding: 13px 16px 12px;
+    border-bottom: 1px solid var(--border-muted);
+    background: #ffffff;
+  }
+  .card-meta {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+  }
+  .state-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 11px;
+    line-height: 1;
+  }
+  .state-open { background: #1a7f37; }
+
+  .card-title {
+    font-size: 15.5px;
+    font-weight: 600;
+    margin: 2px 0 6px;
+    color: var(--text);
+    line-height: 1.3;
+  }
+  .author-line {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .author-line .who { color: var(--text); font-weight: 500; }
+
+  .labels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 9px;
+  }
+  .label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 600;
+    line-height: 1;
+    color: #ffffff;
+    letter-spacing: 0.1px;
+    border: 1px solid rgba(0,0,0,0.08);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .label-blue   { background: #0969da; }
+  .label-purple { background: #8250df; }
+  .label-green  { background: #1a7f37; }
+  .label-yellow { background: #0969da; color: #ffffff; } /* go label = blue */
+
+  .card-body {
+    padding: 14px 16px;
+    overflow: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .description {
+    font-size: 13px;
+    color: var(--text);
+    margin: 0;
+  }
+  .description p { margin: 0 0 7px; }
+  .description p:last-child { margin: 0; }
+  .description .muted { color: var(--text-muted); font-size: 12.5px; }
+  code.inline {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    background: #eaeef2;
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  .section-title {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-subtle);
+    margin: 14px 0 4px;
+    font-weight: 700;
+  }
+
+  /* Conversation thread — bordered block, both rows share left edge */
+  .thread {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    border: 1px solid #ede0fa;
+    background: #faf5ff;
+    border-radius: 6px;
+    padding: 0 11px;
+  }
+  .thread-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 9px 0;
+    border-top: 1px solid #ede0fa;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--text);
+  }
+  .thread-row:first-child { border-top: none; }
+  .thread-row .tr-ico {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1px;
+    color: var(--text-tertiary);
+  }
+  .thread-row.agent .tr-ico { color: var(--accent-purple); }
+  .thread-row .tr-text {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .thread-row .tr-who {
+    font-weight: 700;
+    color: var(--text);
+  }
+  .thread-row.agent .tr-who { color: var(--accent-purple); }
+  .thread-row .tr-body {
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+
+  /* Conversation row col 1 (kept) */
+  .bot-activity {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 9px 11px;
+    background: #faf5ff;
+    border: 1px solid #ede0fa;
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  /* Footer — slim, just the Merge button right-aligned */
+  .card-footer {
+    border-top: 1px solid var(--border-muted);
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    background: #ffffff;
+  }
+
+  .merge-split {
+    display: inline-flex;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid var(--merge-green-border);
+    box-shadow: 0 1px 0 rgba(31,35,40,0.04);
+  }
+  .merge-btn {
+    background: var(--merge-green);
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 13px;
+    padding: 6px 14px;
+    border: none;
+    cursor: pointer;
+    line-height: 18px;
+    font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .merge-btn:hover { background: var(--merge-green-hover); }
+  .merge-caret {
+    background: var(--merge-green);
+    color: #ffffff;
+    border: none;
+    border-left: 1px solid rgba(255,255,255,0.28);
+    padding: 0 9px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .merge-caret:hover { background: var(--merge-green-hover); }
+
+  @media (max-width: 1100px) {
+    .stage { padding: 24px; }
+    .triptych { grid-template-columns: 1fr; }
+    .chevron { transform: rotate(90deg); padding: 0; }
+    .card { height: auto; max-height: none; min-height: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="stage">
+<div class="triptych">
+
+  <!-- =========== COLUMN 1 : ISSUE =========== -->
+  <div class="panel">
+    <div class="placard">
+      <h1 class="headline col-blue">Open issue</h1>
+      <p class="subtitle">
+        Open issue (feature, bug, or task) and add the
+        <span class="inline-label">
+          <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2.5 7.775V2.75a.25.25 0 0 1 .25-.25h5.025a.25.25 0 0 1 .177.073l6.25 6.25a.25.25 0 0 1 0 .354l-5.025 5.025a.25.25 0 0 1-.354 0l-6.25-6.25a.25.25 0 0 1-.073-.177Zm-1.5 0V2.75C1 1.784 1.784 1 2.75 1h5.025c.464 0 .91.184 1.238.513l6.25 6.25a1.75 1.75 0 0 1 0 2.474l-5.026 5.026a1.75 1.75 0 0 1-2.474 0l-6.25-6.25A1.75 1.75 0 0 1 1 7.775Zm6-3.025a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"></path></svg>
+          openspec:go
+        </span>
+        GH label.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-meta">
+          <span class="state-pill state-open">
+            <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor"><path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"></path><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"></path></svg>
+            Open
+          </span>
+          <span>Issue</span>
+        </div>
+        <h2 class="card-title">Add CSV export for order history</h2>
+        <div class="author-line">
+          opened by <span class="who">@alex</span> · 2 days ago
+        </div>
+        <div class="labels">
+          <span class="label label-yellow">
+            <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2.5 7.775V2.75a.25.25 0 0 1 .25-.25h5.025a.25.25 0 0 1 .177.073l6.25 6.25a.25.25 0 0 1 0 .354l-5.025 5.025a.25.25 0 0 1-.354 0l-6.25-6.25a.25.25 0 0 1-.073-.177Zm-1.5 0V2.75C1 1.784 1.784 1 2.75 1h5.025c.464 0 .91.184 1.238.513l6.25 6.25a1.75 1.75 0 0 1 0 2.474l-5.026 5.026a1.75 1.75 0 0 1-2.474 0l-6.25-6.25A1.75 1.75 0 0 1 1 7.775Zm6-3.025a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"></path></svg>
+            openspec:go
+          </span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="description">
+          <p>Users keep asking to export their order history to CSV for accounting. Today the only option is a screenshot.</p>
+          <p>Add a download button on the orders page. Use UTF-8 and RFC 4180 formatting.</p>
+          <p class="muted">cc @billing-team — unblocks the quarterly reconciliation workflow.</p>
+        </div>
+
+        <div class="section-title">Conversation</div>
+        <div class="thread">
+          <div class="thread-row agent">
+            <span class="tr-ico" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 2.75C1 1.784 1.784 1 2.75 1h10.5c.966 0 1.75.784 1.75 1.75v7.5A1.75 1.75 0 0 1 13.25 12H9.06l-2.573 2.573A1.458 1.458 0 0 1 4 13.543V12H2.75A1.75 1.75 0 0 1 1 10.25Z"></path></svg>
+            </span>
+            <span class="tr-text">
+              <span class="tr-who">openspec:</span>
+              <span class="tr-body"> opened add-csv-export specification PR #43.</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ARROW -->
+  <div class="chevron" aria-hidden="true">
+    <svg width="22" height="22" viewBox="0 0 16 16" fill="currentColor"><path d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z"></path></svg>
+  </div>
+
+  <!-- =========== COLUMN 2 : SPEC PR =========== -->
+  <div class="panel">
+    <div class="placard">
+      <h1 class="headline col-purple">Iterate on spec</h1>
+      <p class="subtitle">
+        Review the spec. Discuss in the PR. Use
+        <span class="inline-label">
+          <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2.5 7.775V2.75a.25.25 0 0 1 .25-.25h5.025a.25.25 0 0 1 .177.073l6.25 6.25a.25.25 0 0 1 0 .354l-5.025 5.025a.25.25 0 0 1-.354 0l-6.25-6.25a.25.25 0 0 1-.073-.177Zm-1.5 0V2.75C1 1.784 1.784 1 2.75 1h5.025c.464 0 .91.184 1.238.513l6.25 6.25a1.75 1.75 0 0 1 0 2.474l-5.026 5.026a1.75 1.75 0 0 1-2.474 0l-6.25-6.25A1.75 1.75 0 0 1 1 7.775Zm6-3.025a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"></path></svg>
+          openspec:go
+        </span>
+        to update.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-meta">
+          <span class="state-pill state-open">
+            <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354ZM3.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm8.25.75a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Z"></path></svg>
+            Open
+          </span>
+          <span>· <strong style="color:var(--text)">openspec[bot]</strong> wants to merge into <code class="inline">main</code></span>
+        </div>
+        <h2 class="card-title">spec: add-csv-export — proposal &amp; specs</h2>
+        <div class="author-line">
+          Branch <code class="inline">openspec/add-csv-export</code> · closes #42
+        </div>
+        <div class="labels">
+          <span class="label label-purple">openspec:spec</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="description">
+          <p><strong>Proposal:</strong> add a CSV export action on the orders page. Stream rows server-side, follow RFC 4180, honour the user's locale for dates.</p>
+          <p class="muted">Adds capability <code class="inline">orders-export</code> and a delta on <code class="inline">orders-page</code>.</p>
+        </div>
+
+        <div class="section-title">Conversation</div>
+        <div class="thread">
+          <div class="thread-row">
+            <span class="tr-ico" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 2.75C1 1.784 1.784 1 2.75 1h10.5c.966 0 1.75.784 1.75 1.75v7.5A1.75 1.75 0 0 1 13.25 12H9.06l-2.573 2.573A1.458 1.458 0 0 1 4 13.543V12H2.75A1.75 1.75 0 0 1 1 10.25Z"></path></svg>
+            </span>
+            <span class="tr-text">
+              <span class="tr-who">@alex:</span>
+              <span class="tr-body"> spec is close — we need to handle multi-line.</span>
+            </span>
+          </div>
+          <div class="thread-row agent">
+            <span class="tr-ico" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 2.75C1 1.784 1.784 1 2.75 1h10.5c.966 0 1.75.784 1.75 1.75v7.5A1.75 1.75 0 0 1 13.25 12H9.06l-2.573 2.573A1.458 1.458 0 0 1 4 13.543V12H2.75A1.75 1.75 0 0 1 1 10.25Z"></path></svg>
+            </span>
+            <span class="tr-text">
+              <span class="tr-who">openspec:</span>
+              <span class="tr-body"> specification has been updated with multi-line handling.</span>
+            </span>
+          </div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <div class="merge-split" role="group" aria-label="Merge">
+          <button class="merge-btn" type="button">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M5 3.254V3.25v.005a.75.75 0 1 1 0-.005v.004ZM5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 5 3.25ZM5.75 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm6.5.75a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0ZM13 5.5a3.5 3.5 0 0 0-3.5-3.5h-.628l.823-.823a.75.75 0 1 0-1.06-1.06L6.97 1.78a.75.75 0 0 0 0 1.06l1.664 1.664a.75.75 0 0 0 1.06-1.06L8.87 2.62V2.5A2 2 0 0 1 11 4.5v6.628a2.251 2.251 0 1 0 1.5 0Z"></path></svg>
+            Merge
+          </button>
+          <button class="merge-caret" type="button" aria-label="Select merge method">
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ARROW -->
+  <div class="chevron" aria-hidden="true">
+    <svg width="22" height="22" viewBox="0 0 16 16" fill="currentColor"><path d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z"></path></svg>
+  </div>
+
+  <!-- =========== COLUMN 3 : IMPL PR =========== -->
+  <div class="panel">
+    <div class="placard">
+      <h1 class="headline col-green">Review implementation</h1>
+      <p class="subtitle">
+        Review the implementation. Discuss. Use
+        <span class="inline-label">
+          <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2.5 7.775V2.75a.25.25 0 0 1 .25-.25h5.025a.25.25 0 0 1 .177.073l6.25 6.25a.25.25 0 0 1 0 .354l-5.025 5.025a.25.25 0 0 1-.354 0l-6.25-6.25a.25.25 0 0 1-.073-.177Zm-1.5 0V2.75C1 1.784 1.784 1 2.75 1h5.025c.464 0 .91.184 1.238.513l6.25 6.25a1.75 1.75 0 0 1 0 2.474l-5.026 5.026a1.75 1.75 0 0 1-2.474 0l-6.25-6.25A1.75 1.75 0 0 1 1 7.775Zm6-3.025a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"></path></svg>
+          openspec:go
+        </span>
+        to update.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-meta">
+          <span class="state-pill state-open">
+            <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354ZM3.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm8.25.75a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Z"></path></svg>
+            Open
+          </span>
+          <span>· <strong style="color:var(--text)">openspec[bot]</strong> wants to merge into <code class="inline">main</code></span>
+        </div>
+        <h2 class="card-title">impl: add-csv-export — implementation</h2>
+        <div class="author-line">
+          Branch <code class="inline">openspec/add-csv-export-impl</code> · implements #43 · closes #42
+        </div>
+        <div class="labels">
+          <span class="label label-green">openspec:impl</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="description">
+          <p><strong>Implementation</strong> of the merged <code class="inline">add-csv-export</code> spec.</p>
+          <p class="muted">Adds <code class="inline">GET /api/orders/export.csv</code>, streams chunked responses, wires the download button into the orders page, and ticks every box in <code class="inline">tasks.md</code>.</p>
+        </div>
+
+        <div class="section-title">Conversation</div>
+        <div class="thread">
+          <div class="thread-row">
+            <span class="tr-ico" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 2.75C1 1.784 1.784 1 2.75 1h10.5c.966 0 1.75.784 1.75 1.75v7.5A1.75 1.75 0 0 1 13.25 12H9.06l-2.573 2.573A1.458 1.458 0 0 1 4 13.543V12H2.75A1.75 1.75 0 0 1 1 10.25Z"></path></svg>
+            </span>
+            <span class="tr-text">
+              <span class="tr-who">@alex:</span>
+              <span class="tr-body"> actually let's defer multi-line to later — just warn for now.</span>
+            </span>
+          </div>
+          <div class="thread-row agent">
+            <span class="tr-ico" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 2.75C1 1.784 1.784 1 2.75 1h10.5c.966 0 1.75.784 1.75 1.75v7.5A1.75 1.75 0 0 1 13.25 12H9.06l-2.573 2.573A1.458 1.458 0 0 1 4 13.543V12H2.75A1.75 1.75 0 0 1 1 10.25Z"></path></svg>
+            </span>
+            <span class="tr-text">
+              <span class="tr-who">openspec:</span>
+              <span class="tr-body"> implementation has been updated.</span>
+            </span>
+          </div>
+        </div>
+      </div>
+      <div class="card-footer">
+        <div class="merge-split" role="group" aria-label="Merge">
+          <button class="merge-btn" type="button">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M5 3.254V3.25v.005a.75.75 0 1 1 0-.005v.004ZM5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 5 3.25ZM5.75 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm6.5.75a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0ZM13 5.5a3.5 3.5 0 0 0-3.5-3.5h-.628l.823-.823a.75.75 0 1 0-1.06-1.06L6.97 1.78a.75.75 0 0 0 0 1.06l1.664 1.664a.75.75 0 0 0 1.06-1.06L8.87 2.62V2.5A2 2 0 0 1 11 4.5v6.628a2.251 2.251 0 1 0 1.5 0Z"></path></svg>
+            Merge
+          </button>
+          <button class="merge-caret" type="button" aria-label="Select merge method">
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+</body>
+</html>
