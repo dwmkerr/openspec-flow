@@ -161,6 +161,29 @@ Notes:
 - Composite actions referenced as `./.github/actions/openspec-flow-*` resolve locally — easy.
 - Use this for "did the YAML logic break" not "does the full flow work end-to-end".
 
+## Inspecting PR metadata
+
+The bot maintains a hidden HTML-comment block at the bottom of every PR body
+carrying linkage data (issue number, change name, kind, sibling PR).
+
+```html
+<!-- openspec-flow:auto-maintained — do not remove or edit
+issue: 42
+kind: spec
+change: add-csv-export
+-->
+```
+
+It's invisible in GitHub's rendered view. To inspect:
+
+```bash
+gh pr view <n> --json body -q .body
+```
+
+Or on the PR page, press `e` (edit description) to see the raw source. The
+block is the canonical link between issue, spec PR, and impl PR. See
+`CLAUDE.md` for the schema.
+
 ## The workflow-write permission problem
 
 If a workflow run needs to modify `.github/workflows/*.yml` (e.g., self-update the openspec-flow.yml in a target repo), the default `GITHUB_TOKEN` will refuse — it doesn't carry `workflows: write` and you can't grant it via `permissions:`.
