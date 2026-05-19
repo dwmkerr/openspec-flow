@@ -9,22 +9,24 @@
 ## How it works
 
 ```
-   Open issue                  Iterate on spec              Review implementation
-   add openspec:go     ────►   Discuss in the PR.    ────►  Discuss. Use openspec:go
-                                Use openspec:go to update.   to update.
+   Open issue                  Iterate on spec               Review implementation
+   add openspec:go     ────►   Spec PR created with    ────► Impl PR created with
+                                openspec:spec label.          openspec:impl label.
+                                Use openspec:go to update.    Use openspec:go to update.
+                                Merge when ready.             Merge to ship.
 
-   [issue #42]                 [PR #43 openspec:spec]       [PR #44 openspec:impl]
+   [issue #42]                 [PR #43 openspec:spec]        [PR #44 openspec:impl]
 ```
 
-Three labels drive the whole flow:
+You apply one label (`openspec:go`). The bot applies the rest:
 
-| Label | Meaning |
-|---|---|
-| `openspec:go` | Trigger. Apply to an issue to start the flow. Comment with this on a PR to re-run iteration. |
-| `openspec:spec` | The spec PR. Review the proposal + spec. Merge when good. |
-| `openspec:impl` | The implementation PR. Code that matches the merged spec. Merge to ship. |
+| Label | Applied by | Meaning |
+|---|---|---|
+| `openspec:go` | **you** | Trigger. Add to an issue to start the flow, or to a PR to re-run iteration. |
+| `openspec:spec` | bot | Marks the spec PR opened by the agent. Review the proposal + spec, then merge. |
+| `openspec:impl` | bot | Marks the implementation PR opened by the agent. Review the code, then merge to ship. |
 
-Discussion is optional. Comment on a PR with feedback and the agent updates the spec or implementation in place.
+Discussion is optional. Comment on a PR with feedback, then add `openspec:go` again — the agent updates the spec or implementation in place.
 
 See the [mental model page](./public/index.html) for the full one-page picture.
 

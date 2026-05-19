@@ -13,8 +13,8 @@ tunnel: # Run the ngrok tunnel for local webhook delivery.
 	npm run dev:tunnel
 
 .PHONY: test
-test: # Run the Jest unit test suite.
-	npm test
+test: # Run all Jest tests (unit + integration).
+	npm run test:all
 
 .PHONY: lint
 lint: # Run linters and formatters.
@@ -29,5 +29,13 @@ build: # Compile TypeScript to dist/.
 	npm run build
 
 .PHONY: test-create-issue
-test-create-issue: # Smoke test: delete prior test issue then create a fresh one labelled openspec:go.
-	./scripts/test-create-issue.sh
+test-create-issue: # Smoke test: create-spec intent. Fresh issue + openspec:go.
+	./tests/scripts/test-create-issue.sh
+
+.PHONY: test-closed-issue-noop
+test-closed-issue-noop: # Edge case: openspec:go on a closed issue. Expect visible noop.
+	./tests/scripts/test-closed-issue-noop.sh
+
+.PHONY: test-foreign-pr-noop
+test-foreign-pr-noop: # Edge case: openspec:go on a non-lifecycle PR. Expect visible noop.
+	./tests/scripts/test-foreign-pr-noop.sh

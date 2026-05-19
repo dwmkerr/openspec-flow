@@ -12,6 +12,7 @@
     "noImplicitAny": true,
     "skipLibCheck": true,
     "sourceMap": true,
+    "isolatedModules": true,
     "declaration": true
   },
   "include": ["src/**/*"],
