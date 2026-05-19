@@ -176,6 +176,37 @@ file as the source of truth and update the dependent doc.
 - Tests sit next to source (`*.test.ts`) or under `tests/integration/`.
 - `scratch/` is gitignored; use it for research, mockups, lift notes.
 
+## OpenSpec workflow — IMPORTANT
+
+This repo dogfoods OpenSpec for its own changes. Every non-trivial change
+runs through the lifecycle below. Skipping steps breaks downstream tooling
+and leaves the repo in an inconsistent state.
+
+1. **Start a change**: `openspec new change <kebab-name>`. This creates
+   `openspec/changes/<name>/` with the schema's artifact scaffold.
+2. **Fill the artifacts in dependency order**: `proposal.md` first, then
+   `design.md` and `specs/<capability>/spec.md` in parallel, then
+   `tasks.md`. Use `openspec status --change <name>` to see what's ready.
+3. **Tick tasks** as work lands. `tasks.md` checkboxes are parsed by the
+   apply phase — keep the `- [ ] / - [x]` format exact.
+4. **Validate before opening the impl PR**:
+   `openspec validate --change <name>`. CI should catch this too.
+5. **Archive the change in the impl PR**:
+   `openspec archive <name> --yes` (or via the
+   `openspec-archive-change` skill). Archive moves
+   `openspec/changes/<name>/` to its archived location AND merges any
+   spec deltas into `openspec/specs/<capability>/spec.md`. The
+   resulting tree mutation is part of the same PR that ships the code.
+6. **Never edit `openspec/specs/<capability>/spec.md` by hand.** It's
+   the merged canonical spec. All edits flow through a change's delta
+   file under `openspec/changes/<name>/specs/<capability>/spec.md`.
+7. **Don't delete a change directory manually.** Archive does it.
+8. **One change per impl PR.** Two changes archived together creates
+   ambiguous history.
+
+This is the contract. When in doubt, run `openspec list --json` and
+`openspec status --change <name>` before doing anything.
+
 ## Patterns
 
 - Use `@octokit/webhooks-types` for payload types. Don't hand-roll interfaces.
