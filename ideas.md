@@ -9,3 +9,4 @@
 - [ ] chain spec/impl prs
 - [ ] configurable impl branch prefix per issue type (`feat`, `fix`, `refactor`, `perf`, `docs`, ...). Default `feat`. Could derive from issue labels (`bug` → `fix`).
 - [ ] setup local phoenix to see llm calls / claude logs
+- [ ] keep logs for later viewing

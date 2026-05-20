@@ -117,6 +117,11 @@ export const handleCreateSpec = async (
       cwd: workdir,
       log: opts.log,
       options: {
+        // Unattended run: skip permission prompts for Bash etc. The
+        // workdir is throw-away and the agent has no network egress
+        // beyond the tools we already trust (gh, openspec, git via
+        // the bot's own steps).
+        permissionMode: "bypassPermissions",
         // Inject GH_TOKEN so the agent's `gh issue view` succeeds.
         // Claude never logs env values; this is just subprocess inherit.
         env: { ...process.env, GH_TOKEN: opts.gitPushToken },
