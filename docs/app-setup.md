@@ -100,6 +100,8 @@ ANTHROPIC_API_KEY=sk-ant-...
 LOG_LEVEL=debug
 ```
 
+Anthropic auth follows the same contract as Mode A. The Probot dev loop accepts either an API key (`ANTHROPIC_API_KEY`) or a Claude Code OAuth token (`CLAUDE_CODE_OAUTH_TOKEN`); if both are set the API key wins. For the full Option 1 / Option 2 / both-set guidance, see the canonical block in the README: [Configure Anthropic auth](../README.md#configure-anthropic-auth).
+
 ## Step 5 — create the three labels
 
 In your sandbox repo, create the labels the bot reacts to:

@@ -55,6 +55,43 @@ jobs:
 ```
 
 Add three secrets (`ANTHROPIC_API_KEY`, `OPENSPEC_FLOW_APP_ID`, `OPENSPEC_FLOW_PRIVATE_KEY`).
+
+### Configure Anthropic auth
+
+The workflow needs Anthropic credentials to drive the agent. At least one of `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` MUST be set as a repository secret, or the agent step fails fast with `::error::Neither anthropic_api_key nor claude_code_oauth_token was provided.`
+
+#### Option 1 — Anthropic API key (recommended for CI)
+
+Get a key from the [Anthropic Console](https://console.anthropic.com/settings/keys).
+
+Add it as a repository secret via GitHub Settings → Secrets and variables → Actions → **New repository secret**, name it `ANTHROPIC_API_KEY`, and paste the value.
+
+Or use `gh`:
+
+```bash
+gh secret set ANTHROPIC_API_KEY --body "$ANTHROPIC_API_KEY"
+```
+
+#### Option 2 — Claude Code OAuth token (subscription)
+
+Subscription users can authenticate with an OAuth token instead of API billing. Generate one with the Claude Code CLI:
+
+```bash
+claude setup-token
+```
+
+Add the printed token as a repository secret named `CLAUDE_CODE_OAUTH_TOKEN`:
+
+```bash
+gh secret set CLAUDE_CODE_OAUTH_TOKEN --body "$CLAUDE_CODE_OAUTH_TOKEN"
+```
+
+#### Both set?
+
+If both secrets are configured, the Claude Agent SDK uses the API key and the OAuth token is ignored. This matches the runtime `::warning::` emitted by `openspec-flow-run-agent/action.yml`. Delete the `ANTHROPIC_API_KEY` secret to route subscription auth.
+
+> Org secrets work the same way — set the secret at the org level and ensure the repo is in the allowlist.
+
 Add the three labels (`openspec:go`, `openspec:spec`, `openspec:impl`).
 Open an issue. Apply `openspec:go`. Done.
 

@@ -71,6 +71,8 @@ jobs:
       OPENSPEC_FLOW_PRIVATE_KEY: ${{ secrets.OPENSPEC_FLOW_PRIVATE_KEY }}
 ```
 
+Install steps and secret configuration live in the [README](../README.md#configure-anthropic-auth).
+
 The real logic lives in this repo's reusable workflow + composite actions, lifted from livedown.
 
 Pros: zero infrastructure, free on public repos, near-zero install cost.
