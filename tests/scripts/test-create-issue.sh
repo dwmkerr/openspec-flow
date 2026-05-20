@@ -14,10 +14,10 @@ echo "→ delete prior $LABEL issues"
 delete_issues_with_label "$LABEL"
 
 echo "→ create fresh issue"
-N=$(create_issue "$LABEL" "$TITLE" "$BODY")
-echo "  · created #$N"
+N=$(create_fixture_issue "$LABEL" "$TITLE" "$BODY")
+printf "  · created %s\n" "$(issue_link "$N")"
 
 echo "→ apply $TRIGGER_LABEL"
 gh issue edit "$N" -R "$REPO" --add-label "$TRIGGER_LABEL" >/dev/null
 
-echo "✓ done — expect create-spec intent in terminal 2"
+printf "✓ done — expect create-spec intent on %s\n" "$(issue_link "$N")"

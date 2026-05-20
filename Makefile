@@ -39,3 +39,7 @@ test-closed-issue-noop: # Edge case: openspec:go on a closed issue. Expect visib
 .PHONY: test-foreign-pr-noop
 test-foreign-pr-noop: # Edge case: openspec:go on a non-lifecycle PR. Expect visible noop.
 	./tests/scripts/test-foreign-pr-noop.sh
+
+.PHONY: test-cleanup
+test-cleanup: # Delete every issue/PR labelled test:fixture. Idempotent.
+	./tests/scripts/cleanup.sh

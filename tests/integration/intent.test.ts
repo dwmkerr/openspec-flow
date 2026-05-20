@@ -41,36 +41,63 @@ const stubInstallationToken = () =>
     .post("/app/installations/1/access_tokens")
     .reply(200, { token: "test", permissions: { issues: "write" } });
 
+// Record call order so we can assert the reaction precedes the comment.
+let callLog: string[] = [];
+
+beforeEach(() => {
+  callLog = [];
+});
+
 const stubComment = (issueNumber: number) => {
   let capturedBody: string | undefined;
   const scope = nock("https://api.github.com")
     .post(`/repos/dwmkerr/openspec-flow/issues/${issueNumber}/comments`, (b) => {
       capturedBody = b.body;
+      callLog.push("comment");
       return true;
     })
     .reply(201, { id: 1 });
   return { scope, getBody: () => capturedBody };
 };
 
+const stubReaction = (issueNumber: number) => {
+  let capturedBody: any;
+  const scope = nock("https://api.github.com")
+    .post(`/repos/dwmkerr/openspec-flow/issues/${issueNumber}/reactions`, (b) => {
+      capturedBody = b;
+      callLog.push("reaction");
+      return true;
+    })
+    .reply(201, { id: 1, content: "eyes" });
+  return { scope, getBody: () => capturedBody };
+};
+
+// Any POST other than the explicitly-stubbed comment/reaction endpoints
+// should never fire. The fallback matchers return 400 so an unexpected
+// call surfaces as a test failure rather than passing silently.
 const fail400OnAnythingElse = () =>
   nock("https://api.github.com")
-    .post(/^\/repos\/dwmkerr\/openspec-flow(?!\/issues\/\d+\/comments).*/)
+    .post(/^\/repos\/dwmkerr\/openspec-flow(?!\/issues\/\d+\/(comments|reactions)).*/)
     .reply(400, "unexpected octokit call")
     .post(/.*/)
     .reply(400, "unexpected octokit call");
 
 describe("dispatcher integration", () => {
-  it("issues.labeled openspec:go → posts intent comment on the issue", async () => {
+  it("issues.labeled openspec:go → eyes reaction then intent comment", async () => {
     stubInstallationToken();
+    const reaction = stubReaction(42);
     const { getBody } = stubComment(42);
 
     await probot.receive({ id: "1", name: "issues", payload: issueLabeled() as any });
 
+    expect(reaction.getBody()).toEqual({ content: "eyes" });
     expect(getBody()).toContain("create specification for issue #42");
+    expect(callLog).toEqual(["reaction", "comment"]);
   });
 
-  it("openspec:go on PR with openspec:spec → posts iterate-spec comment", async () => {
+  it("openspec:go on PR with openspec:spec → eyes reaction then iterate-spec comment", async () => {
     stubInstallationToken();
+    const reaction = stubReaction(43);
     const { getBody } = stubComment(43);
 
     await probot.receive({
@@ -79,11 +106,14 @@ describe("dispatcher integration", () => {
       payload: prLabeled({ prNumber: 43, labels: ["openspec:spec", "openspec:go"] }) as any,
     });
 
+    expect(reaction.getBody()).toEqual({ content: "eyes" });
     expect(getBody()).toContain("iterate on spec PR #43");
+    expect(callLog).toEqual(["reaction", "comment"]);
   });
 
-  it("spec PR merged → posts create-impl comment", async () => {
+  it("spec PR merged → eyes reaction then create-impl comment", async () => {
     stubInstallationToken();
+    const reaction = stubReaction(43);
     const { getBody } = stubComment(43);
 
     await probot.receive({
@@ -92,11 +122,14 @@ describe("dispatcher integration", () => {
       payload: prClosed({ prNumber: 43, merged: true, labels: ["openspec:spec"] }) as any,
     });
 
+    expect(reaction.getBody()).toEqual({ content: "eyes" });
     expect(getBody()).toContain("create implementation");
+    expect(callLog).toEqual(["reaction", "comment"]);
   });
 
-  it("openspec:go on closed issue → posts visible-noop comment", async () => {
+  it("openspec:go on closed issue → eyes reaction then visible-noop comment", async () => {
     stubInstallationToken();
+    const reaction = stubReaction(42);
     const { getBody } = stubComment(42);
 
     await probot.receive({
@@ -105,12 +138,15 @@ describe("dispatcher integration", () => {
       payload: issueLabeled({ state: "closed" }) as any,
     });
 
+    expect(reaction.getBody()).toEqual({ content: "eyes" });
     expect(getBody()).toContain("Ignored:");
     expect(getBody()).toContain("closed");
+    expect(callLog).toEqual(["reaction", "comment"]);
   });
 
-  it("user applies openspec:spec manually → posts transfer-mode comment", async () => {
+  it("user applies openspec:spec manually → eyes reaction then transfer-mode comment", async () => {
     stubInstallationToken();
+    const reaction = stubReaction(43);
     const { getBody } = stubComment(43);
 
     await probot.receive({
@@ -119,7 +155,22 @@ describe("dispatcher integration", () => {
       payload: prLabeled({ labelAdded: "openspec:spec", labels: ["openspec:spec"] }) as any,
     });
 
+    expect(reaction.getBody()).toEqual({ content: "eyes" });
     expect(getBody()).toContain("stepping back");
+    expect(callLog).toEqual(["reaction", "comment"]);
+  });
+
+  it("reaction failure does not block the comment", async () => {
+    stubInstallationToken();
+    // Reactions endpoint fails — comment must still post.
+    nock("https://api.github.com")
+      .post("/repos/dwmkerr/openspec-flow/issues/42/reactions")
+      .reply(403, "Resource not accessible by integration");
+    const { getBody } = stubComment(42);
+
+    await probot.receive({ id: "9", name: "issues", payload: issueLabeled() as any });
+
+    expect(getBody()).toContain("create specification for issue #42");
   });
 
   it("non-trigger label → silent noop, no comment posted", async () => {

@@ -58,11 +58,37 @@ const eventContext = (
   };
 };
 
+// Crop a title to keep noop log lines scannable in a narrow terminal.
+const cropTitle = (t: string | undefined, max = 40): string => {
+  if (!t) return "";
+  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
+};
+
+// Compact `[#N "title"]` suffix for noop one-liners; falls back to
+// `[#N]` when no title is available, or "" when there's no target.
+const targetTag = (payload: any): string => {
+  const num = targetNumber(payload);
+  if (num === null) return "";
+  const title = cropTitle(payload?.issue?.title ?? payload?.pull_request?.title);
+  return title ? ` [#${num} "${title}"]` : ` [#${num}]`;
+};
+
 const dispatch = async (
   intent: Intent,
   context: Context<(typeof EVENTS)[number]>,
 ): Promise<void> => {
   const summary = describe(intent);
+
+  // Silent noops collapse to a single line so the actionable events
+  // stand out in the dev pane. Actionable + visible-noop intents keep
+  // the rich multi-line structured log for debugging.
+  if (intent.kind === "noop" && !intent.visible) {
+    const p = context.payload as any;
+    const event = `${context.name}.${p?.action ?? "?"}`;
+    context.log.info(`noop — ${intent.reason} (${event})${targetTag(p)}`);
+    return;
+  }
+
   context.log.info(
     { ...eventContext(context), intent: intent.kind, summary },
     "intent",
@@ -76,6 +102,10 @@ const dispatch = async (
     return;
   }
 
+  // Eyes reaction is the fast deterministic ack. Comment follows as the
+  // substantive ack. Reaction is best-effort — never blocks the comment.
+  await reactEyes(context, issueNumber);
+
   const body =
     intent.kind === "noop"
       ? `${summary}`
@@ -87,4 +117,23 @@ const dispatch = async (
     issue_number: issueNumber,
     body,
   });
+};
+
+const reactEyes = async (
+  context: Context<(typeof EVENTS)[number]>,
+  issueNumber: number,
+): Promise<void> => {
+  try {
+    await context.octokit.reactions.createForIssue({
+      owner: context.repo().owner,
+      repo: context.repo().repo,
+      issue_number: issueNumber,
+      content: "eyes",
+    });
+  } catch (err) {
+    context.log.warn(
+      { ...eventContext(context), err: (err as Error).message },
+      "eyes reaction failed",
+    );
+  }
 };
