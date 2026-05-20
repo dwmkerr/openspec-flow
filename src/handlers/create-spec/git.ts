@@ -68,5 +68,20 @@ export const commit = (workdir: string, message: string): void => {
 };
 
 export const pushBranch = (workdir: string, branch: string): void => {
+  // Fetch the current remote ref so --force-with-lease has a real
+  // lease to compare against. A fresh workdir has no local view of
+  // origin/<branch>; without this fetch, force-with-lease refuses
+  // every re-trigger as a stale-lease violation. If the remote
+  // branch doesn't exist yet (first push), the fetch fails — swallow
+  // it and let the push create the branch.
+  try {
+    run(["fetch", "origin", branch], workdir);
+  } catch {
+    // remote branch doesn't exist yet — first push will create it
+  }
+  // --force-with-lease still protects against concurrent writers
+  // (e.g. a reviewer pushing a fix to the spec PR branch). If the
+  // lease fails, the handler catches the error and posts a visible
+  // failure comment so the operator can switch to iterate-spec.
   run(["push", "--force-with-lease", "-u", "origin", branch], workdir);
 };
