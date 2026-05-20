@@ -58,3 +58,18 @@ can choose one with eyes open.
 - Downstream: a follow-on change can either (a) re-scope Phase 2 around shim
   distribution and shrink/retire the Probot service, or (b) keep Probot and add
   the shim path beside it. This proposal keeps both doors open.
+
+## What this unlocks
+
+- This change: `explore-shim-architecture` — adds the `shim-distribution`
+  capability spec, enumerates five candidate strategies, locks in the
+  evaluation rubric, and leaves Mode A and Mode B unchanged.
+- Follow-on: `select-shim-strategy` — scores the five strategies against
+  the rubric, picks a single winner, and amends the
+  `shim-distribution` spec with strategy-specific install/upgrade/remove
+  requirements. Stub created alongside this change at
+  `openspec/changes/select-shim-strategy/`.
+- After selection lands, the chosen-strategy implementation change
+  (likely one of `add-shim-installer-app`,
+  `add-openspec-flow-init-cli`, or `formalise-thin-shim-workflow`) ships
+  the code that actually distributes the shim into target repos.

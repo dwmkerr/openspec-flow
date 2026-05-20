@@ -83,6 +83,37 @@ Register `openspec-flow` as a GitHub App. Users click "Install" on the org/repo.
 Pros: `openspec-flow[bot]` identity, sub-10s response, can update workflow files, central upgrade path.
 Cons: hosting bill (~$3–7/mo on Fly.io), secrets management, more moving parts.
 
+## Shim model
+
+The two install modes above share a deeper insight: the agent's identity is
+the App installation token, not the runtime. Wherever the token is minted
+(GitHub Actions runner, Probot service, future host), commits come out as
+`openspec-flow[bot]`. The runtime is a deployment choice; the App is the
+identity provider.
+
+That decoupling makes "shim distribution" its own capability — what file
+sits in a target repo's `.github/workflows/`, who maintains it, how it
+upgrades, and what version pinning it uses. The capability is documented
+in [`openspec/specs/shim-distribution/spec.md`](../openspec/specs/shim-distribution/spec.md),
+which:
+
+- Enumerates five candidate strategies (S1 thin reusable-workflow shim,
+  S2 App-as-installer, S3 npm scaffolder, S4 fat workflow shim,
+  S5 manifest-only).
+- Defines the four shim lifecycle operations (install, upgrade, drift
+  detect, remove) and which actor performs each.
+- Locks in `@v1` major-version pinning so target repos pick up
+  non-breaking releases for free and opt in to breaking ones via PR.
+- Publishes the evaluation rubric (install friction, run latency,
+  operating cost, security surface, upgrade UX, transparency) that a
+  follow-on `select-shim-strategy` change will score and use to pick a
+  single strategy.
+
+This section intentionally does not pick a strategy. The current Mode A /
+Mode B split above continues to work unchanged; the shim-distribution
+capability is the lens through which we will choose how openspec-flow is
+installed and upgraded across many target repos.
+
 ## create-spec handler — agent / bot split
 
 The `create-spec` handler is the first real beat. Two parts:
@@ -365,6 +396,11 @@ openspec-flow/
 
 - App slug: `openspec-flow` (assumed available; verify).
 - Distribution surface: reusable workflow only, or also publish composite actions and an npm scaffolder? Recommend reusable workflow + npm scaffolder (`npx @dwmkerr/openspec-flow init`).
+- Shim vs Probot: which distribution strategy wins? Tracked by the
+  `explore-shim-architecture` RFC (this repo, change
+  `explore-shim-architecture`) and the follow-on `select-shim-strategy`
+  change. See the [shim model](#shim-model) section and
+  [`openspec/specs/shim-distribution/spec.md`](../openspec/specs/shim-distribution/spec.md).
 - Whether to keep the workflow inside livedown until v0.1.0 ships, or extract immediately and rewire livedown. Recommend extract first, rewire livedown second.
 - Hosting region for Fly.io.
 
