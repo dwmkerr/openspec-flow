@@ -13,11 +13,11 @@ echo "→ delete prior $LABEL issues"
 delete_issues_with_label "$LABEL"
 
 echo "→ create issue + close it"
-N=$(create_issue "$LABEL" "$TITLE" "$BODY")
+N=$(create_fixture_issue "$LABEL" "$TITLE" "$BODY")
 gh issue close "$N" -R "$REPO" --reason "not planned" >/dev/null
-echo "  · closed #$N"
+printf "  · closed %s\n" "$(issue_link "$N")"
 
 echo "→ apply $TRIGGER_LABEL to closed issue"
 gh issue edit "$N" -R "$REPO" --add-label "$TRIGGER_LABEL" >/dev/null
 
-echo "✓ done — expect visible-noop comment 'Issue #$N is closed'"
+printf "✓ done — expect visible-noop comment on %s\n" "$(issue_link "$N")"

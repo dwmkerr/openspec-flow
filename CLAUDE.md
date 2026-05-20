@@ -211,7 +211,7 @@ This is the contract. When in doubt, run `openspec list --json` and
 
 - Use `@octokit/webhooks-types` for payload types. Don't hand-roll interfaces.
 - Parse structured text (YAML, JSON) with a real parser. Don't reach for regex.
-- Test scripts in `tests/scripts/` identify their artefacts by a unique `test:<scenario>` label so runs are isolated and idempotent.
+- Test scripts in `tests/scripts/` identify their artefacts by a unique `test:<scenario>` label so runs are isolated and idempotent. They also apply the shared `test:fixture` marker; `make test-cleanup` deletes anything carrying it.
 - Probot integration tests need a real 2048-bit RSA key — generate with `crypto.generateKeyPairSync` in `beforeEach`.
 - Imports use `.js` suffix (Node16 ESM-style). `jest.config.js` strips them via `moduleNameMapper`.
 - `app.on(eventName)` gives typed `Context`. `app.onAny` does not — prefer the former.

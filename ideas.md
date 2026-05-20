@@ -1,4 +1,5 @@
-- [ ] quickly respond on issues / prs with the 'eyes' symbol similar to how claude action does it
+- [x] quickly respond on issues / prs with the 'eyes' symbol similar to how claude action does it
+- [ ] reaction lifecycle: 👀 on receipt, 🚀 (or remove eyes) when done, ❌/🙏 on failure. Signals busy vs done state, not just "saw it".
 
 - [ ] learn and improve flow: reviews an openspec flow and suggests improvements to skills/agents/etc
 - [ ] zero shot issues
