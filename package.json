@@ -6,6 +6,9 @@
   "private": false,
   "type": "commonjs",
   "main": "./dist/index.js",
+  "bin": {
+    "openspec-flow": "./bin/openspec-flow"
+  },
   "files": [
     "dist",
     "public",
@@ -16,6 +19,7 @@
     "build": "tsc",
     "build:watch": "tsc -w",
     "dev": "tsx watch src/server.ts",
+    "cli": "tsx src/cli.ts",
     "dev:tunnel:smee": "smee -u $(cat .smee-url 2>/dev/null || echo 'https://smee.io/REPLACE-ME') --path /api/github/webhooks --port 3000",
     "dev:tunnel:ngrok": "ngrok http --url=https://stamp-liftoff-safari.ngrok-free.dev 3000",
     "dev:tunnel": "npm run dev:tunnel:ngrok",
@@ -30,7 +34,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.145",
     "@octokit/webhooks-types": "^7.6.1",
+    "chalk": "^4.1.2",
     "dotenv": "^17.4.2",
     "probot": "^13.4.4",
     "yaml": "^2.9.0"

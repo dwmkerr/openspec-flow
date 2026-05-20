@@ -5,12 +5,22 @@
 import { generateKeyPairSync } from "node:crypto";
 import nock from "nock";
 import { Probot, ProbotOctokit } from "probot";
+
+// Mock the create-spec handler so the dispatcher can be exercised
+// without invoking Claude. Module mock must be hoisted before the
+// `app` import below.
+jest.mock("../../src/handlers/create-spec/index", () => ({
+  handleCreateSpec: jest.fn().mockResolvedValue("stub reply"),
+}));
+import { handleCreateSpec } from "../../src/handlers/create-spec/index";
 import app from "../../src/index";
 import {
   issueLabeled,
   prClosed,
   prLabeled,
 } from "../fixtures/load";
+
+const mockHandler = handleCreateSpec as jest.Mock;
 
 // Generate a real 2048-bit RSA key once per test run — Probot signs JWTs.
 const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -46,6 +56,7 @@ let callLog: string[] = [];
 
 beforeEach(() => {
   callLog = [];
+  mockHandler.mockClear();
 });
 
 const stubComment = (issueNumber: number) => {
@@ -158,6 +169,46 @@ describe("dispatcher integration", () => {
     expect(reaction.getBody()).toEqual({ content: "eyes" });
     expect(getBody()).toContain("stepping back");
     expect(callLog).toEqual(["reaction", "comment"]);
+  });
+
+  it("create-spec intent calls handleCreateSpec with issue context", async () => {
+    stubInstallationToken();
+    stubReaction(42);
+    stubComment(42);
+
+    await probot.receive({ id: "10", name: "issues", payload: issueLabeled() as any });
+
+    expect(mockHandler).toHaveBeenCalledTimes(1);
+    const passed = mockHandler.mock.calls[0][0];
+    expect(passed.issueNumber).toBe(42);
+    expect(passed.issueTitle).toBe("Add CSV export");
+    expect(typeof passed.log.info).toBe("function");
+  });
+
+  it("noop intents do not call the handler", async () => {
+    fail400OnAnythingElse();
+
+    await probot.receive({
+      id: "11",
+      name: "issues",
+      payload: issueLabeled({ labelAdded: "bug" }) as any,
+    });
+
+    expect(mockHandler).not.toHaveBeenCalled();
+  });
+
+  it("handler failure does not crash the webhook", async () => {
+    stubInstallationToken();
+    stubReaction(42);
+    stubComment(42);
+    mockHandler.mockRejectedValueOnce(new Error("api down"));
+
+    // Reaching the assertion without throw proves the dispatcher
+    // caught the handler error.
+    await expect(
+      probot.receive({ id: "12", name: "issues", payload: issueLabeled() as any }),
+    ).resolves.not.toThrow();
+    expect(mockHandler).toHaveBeenCalledTimes(1);
   });
 
   it("reaction failure does not block the comment", async () => {
