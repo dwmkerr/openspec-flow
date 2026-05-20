@@ -33,9 +33,15 @@ export const buildLogger = (): Logger => {
   // widest. That fixed width lets src/agent/format-chunk.ts size
   // its truncation deterministically (see PINO_PREFIX_RESERVE
   // there). If you change this `ignore` list, update that constant.
+  //
+  // `req` is dropped because pino-http (which Probot wraps) emits
+  // it on every webhook with full headers + query + params — ~25
+  // pretty lines per request. The msg already conveys what matters
+  // (`POST /api/github/webhooks 200 - 3ms`); the raw req object
+  // is still captured in the JSON file when LOG_PATH is set.
   const prettyOptions = {
     destination: 1,
-    ignore: "pid,hostname,name",
+    ignore: "pid,hostname,name,req",
   };
 
   if (!logPath) {
