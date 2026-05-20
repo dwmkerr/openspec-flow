@@ -3,6 +3,9 @@
 - [ ] `runAgent` opts: explicit `allowedTools: string[]` + `permissionMode` shape so handlers can narrow Claude's tool surface without reaching into `options` pass-through.
 - [ ] Action mode: detect `GITHUB_WORKSPACE`, skip the clone, use the actions/checkout dir as cwd.
 - [ ] Bash deny-list hook for paranoid mode (prevent `git`/`gh pr`/`gh push` from agent's Bash even if it's prompted to use them). Defence in depth.
+- [ ] Chained mode: rebase impl branch when spec branch force-pushes. Currently the impl diff goes stale; manual reset needed. Detect divergence and offer auto-rebase or visible warning.
+- [ ] Re-trigger impl on existing PR: update PR body / re-push commits rather than blind force-push. Idempotency for openspec:go on a spec PR that already has a stacked impl PR.
+- [ ] Slim the pino-http req serializer to `{id, method, url}` only. Default includes 16 headers + query + params per request — 27 such records per impl run blows the dev pane. One-line fix in src/logger.ts.
 
 - [ ] learn and improve flow: reviews an openspec flow and suggests improvements to skills/agents/etc
 - [ ] zero shot issues
@@ -10,3 +13,4 @@
 - [ ] configurable impl branch prefix per issue type (`feat`, `fix`, `refactor`, `perf`, `docs`, ...). Default `feat`. Could derive from issue labels (`bug` → `fix`).
 - [ ] setup local phoenix to see llm calls / claude logs
 - [ ] keep logs for later viewing
+- [ ] claude action style spinner when the agent is working, upserted comment or similar, this is more complex but worth doing (i.e. what the agent is doing, what the result is)

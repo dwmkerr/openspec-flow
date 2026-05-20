@@ -173,6 +173,34 @@ export const handleCreateSpec = async (
     );
 
     opts.log.info(`create-spec: done — ${pr.data.html_url}`);
+
+    // Chained mode: immediately invoke the impl handler on top of
+    // the spec branch (stacked PR). Wrapped in its own try/catch so
+    // an impl failure does not roll back the (successful) spec PR.
+    if (process.env.OPENSPEC_FLOW_CHAINED_MODE?.toLowerCase() === "true") {
+      opts.log.info("create-spec: chained mode — invoking create-impl");
+      try {
+        const { handleCreateImpl } = await import("../create-impl/index.js");
+        await handleCreateImpl({
+          owner: opts.owner,
+          repo: opts.repo,
+          mode: "chained",
+          specPrNumber: pr.data.number,
+          specBranch: branch,
+          changeName,
+          issueNumber: opts.issueNumber,
+          issueTitle: opts.issueTitle,
+          octokit: opts.octokit as any,
+          gitPushToken: opts.gitPushToken,
+          log: opts.log,
+        });
+      } catch (chainedErr) {
+        opts.log.warn(
+          `create-spec: chained impl failed: ${(chainedErr as Error).message}`,
+        );
+      }
+    }
+
     return { prNumber: pr.data.number, prUrl: pr.data.html_url };
   } catch (err) {
     const msg = (err as Error).message;

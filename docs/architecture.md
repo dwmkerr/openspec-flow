@@ -112,6 +112,82 @@ Claude never sees the token directly. The handler passes it as `GH_TOKEN` env to
 
 Anything deterministic (branch naming, commit format, PR body metadata block, labelling) is shipped by code. Anything that needs reading and drafting (issue context → OpenSpec artefacts) is the agent's job. This minimises Claude's tool surface, eliminates token exposure for the PR step, and means a single regex/format change ripples to one place — not a re-prompt.
 
+## create-impl handler — sequential + chained modes
+
+The `create-impl` handler mirrors `create-spec` exactly. Bot owns git/PR mechanics; agent invokes `openspec-apply-change` → `openspec-verify-change` → `openspec archive <name> --yes`. Archive happens in the impl PR's own commits, per CLAUDE.md.
+
+Two trigger modes:
+
+```
+                              ┌──── sequential (default) ────┐
+                              │                              │
+   spec PR merges to main ────┘                              │
+                                                             ▼
+                                                  ┌─────────────────────┐
+                                                  │ create-impl handler │
+                                                  │  base: main         │
+                                                  │  head: feat/N-slug  │
+                                                  └─────────────────────┘
+                                                             ▲
+                              ┌──── chained (dev only) ──────┘
+                              │
+   create-spec finishes ──────┘
+   (OPENSPEC_FLOW_CHAINED_MODE=true)
+                                                  base: chore/N-slug
+                                                  head: feat/N-slug
+                                                  (stacked PR)
+```
+
+### Stacked PR transition
+
+When chained mode opens the impl PR on top of the spec branch, GitHub's stacked-PR behaviour does the rest: when the spec PR later merges to main, GitHub **automatically** retargets the impl PR's base to main and filters the now-merged commits out of the impl diff. No bot intervention needed for the transition.
+
+### Mode detection
+
+The handler takes an explicit `mode: "sequential" | "chained"` opt. Callers are unambiguous:
+
+- **Sequential**: dispatcher routes the classifier's `create-impl` intent (fires on spec-PR merge). Handler fetches the spec PR body via Octokit and parses the metadata block to recover `issue` and `change`.
+- **Chained**: `create-spec` handler invokes `create-impl` directly at its tail when `OPENSPEC_FLOW_CHAINED_MODE=true`. All context (spec PR number, spec branch, change name, issue number, issue title) is passed in — no Octokit lookups needed.
+
+### Workdir flow
+
+Sequential:
+1. Clone main (already has merged spec)
+2. Run agent
+3. Branch `feat/N-slug` off main
+4. Push, open PR base=main
+
+Chained:
+1. Clone, then `git fetch origin <specBranch>` + `git checkout <specBranch>`
+2. Run agent on top of the spec changes
+3. Branch `feat/N-slug` off the spec branch
+4. Push, open PR base=`<specBranch>`
+
+### Post-agent verification
+
+The handler reads the workdir filesystem to confirm the agent actually finished:
+
+| Check | Why |
+|---|---|
+| `openspec/changes/<name>/` is GONE | Agent ran `openspec archive --yes` |
+| `openspec/changes/archive/*-<name>/` exists | Archive landed |
+| `git status --porcelain` is non-empty | Agent wrote real code |
+
+Any check failing surfaces a single failure comment on the issue and aborts before the bot touches git or opens the PR.
+
+### Edge cases
+
+| Scenario | Behaviour |
+|---|---|
+| Spec PR closed unmerged | Sequential mode: no `create-impl` event fires. Chained mode: GitHub closes the stacked impl PR automatically. |
+| Re-trigger on existing impl PR | Handler force-pushes `feat/N-slug` with `--force-with-lease`. Future improvement: detect existing PR and update body rather than re-open. |
+| Agent fails mid-flow (option A) | Partial impl PR (if opened) stays open; failure comment on both issue and impl PR. Operator can push manual fixes. |
+| Verify reports CRITICAL forever | Agent's own turn budget is the backstop. Handler catches, posts failure. |
+
+### Why a separate handler vs sharing with create-spec
+
+Tempting to factor a generic `runAgentHandler(opts)`. Don't yet — the two differ on skill set, workdir setup, PR base, branch prefix, label, metadata block fields, and post-agent verification. Sharing the helpers (`slug`, `workdir`, `git`, `preconditions`, `changes`, `pr`) covers the actual reuse. The orchestration code is short; a shared abstraction would cost more in indirection than it saves.
+
 ## Framework choice
 
 **Probot** (TypeScript, v14.3.2 as of April 2026). Actively maintained, wraps `@octokit/app` + `@octokit/webhooks`, handles JWT auth and per-installation tokens, has built-in fixture replay (`probot receive`). Smaller projects use raw `@octokit/app` + Hono but Probot saves ~500 lines of plumbing and is well-trodden.

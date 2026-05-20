@@ -1,6 +1,7 @@
 import type { Context, Probot } from "probot";
 import { Intent, classify, describe } from "./intent.js";
 import { handleCreateSpec } from "./handlers/create-spec/index.js";
+import { handleCreateImpl } from "./handlers/create-impl/index.js";
 
 // openspec-flow Probot entry point.
 //
@@ -20,7 +21,18 @@ const EVENTS = [
   "workflow_run",
 ] as const;
 
+// Captured at boot so the dispatcher can hand it to handlers.
+// Handlers stream long agent traces (one logger.info per chunk);
+// pinning those to context.log would tag every line with the
+// webhook delivery id, which is the wrong semantic — the chunks
+// are handler-scoped, not request-scoped. Using app.log keeps the
+// id on HTTP / intent classification logs (where it's useful for
+// correlating with GitHub's webhook delivery page) but drops it
+// from the agent stream.
+let rootLog: Probot["log"] | undefined;
+
 export default (app: Probot): void => {
+  rootLog = app.log;
   app.log.info("openspec-flow Probot booted");
 
   for (const name of EVENTS) {
@@ -122,7 +134,7 @@ const dispatch = async (
   // Route actionable intents to their handlers. Handlers are bounded
   // best-effort: errors are caught and logged so a logic bug never
   // crashes the webhook (Probot would otherwise retry on throw).
-  if (intent.kind === "create-spec") {
+  if (intent.kind === "create-spec" || intent.kind === "create-impl") {
     try {
       // Mint an installation token so the handler can `git push` and
       // give the agent's Bash subprocess a GH_TOKEN for `gh issue view`.
@@ -131,22 +143,43 @@ const dispatch = async (
       };
       const token = auth?.token;
       if (!token) throw new Error("could not obtain installation token");
-      await handleCreateSpec({
-        owner: context.repo().owner,
-        repo: context.repo().repo,
-        issueNumber: intent.issueNumber,
-        issueTitle: intent.title,
-        octokit: context.octokit as any,
-        gitPushToken: token,
-        log: {
-          info: (m: string) => context.log.info(m),
-          warn: (m: string) => context.log.warn(m),
-        },
-      });
+
+      // Handler-scoped log uses the root logger so streamed agent
+      // chunks aren't tagged with the webhook delivery id (which
+      // would multiply by ~50 lines per intent and obscure the
+      // actual reasoning). Errors are still logged via context.log
+      // below to keep delivery correlation on the failure record.
+      const handlerLog = rootLog ?? context.log;
+      const log = {
+        info: (m: string) => handlerLog.info(m),
+        warn: (m: string) => handlerLog.warn(m),
+      };
+
+      if (intent.kind === "create-spec") {
+        await handleCreateSpec({
+          owner: context.repo().owner,
+          repo: context.repo().repo,
+          issueNumber: intent.issueNumber,
+          issueTitle: intent.title,
+          octokit: context.octokit as any,
+          gitPushToken: token,
+          log,
+        });
+      } else {
+        await handleCreateImpl({
+          owner: context.repo().owner,
+          repo: context.repo().repo,
+          mode: "sequential",
+          specPrNumber: intent.specPrNumber,
+          octokit: context.octokit as any,
+          gitPushToken: token,
+          log,
+        });
+      }
     } catch (err) {
       context.log.error(
         { ...eventContext(context), err: (err as Error).message },
-        "create-spec handler failed",
+        `${intent.kind} handler failed`,
       );
     }
   }
