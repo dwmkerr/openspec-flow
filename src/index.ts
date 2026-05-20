@@ -2,6 +2,7 @@ import type { Context, Probot } from "probot";
 import { Intent, classify, describe } from "./intent.js";
 import { handleCreateSpec } from "./handlers/create-spec/index.js";
 import { handleCreateImpl } from "./handlers/create-impl/index.js";
+import { handleIterateSpec } from "./handlers/iterate-spec/index.js";
 
 // openspec-flow Probot entry point.
 //
@@ -134,7 +135,11 @@ const dispatch = async (
   // Route actionable intents to their handlers. Handlers are bounded
   // best-effort: errors are caught and logged so a logic bug never
   // crashes the webhook (Probot would otherwise retry on throw).
-  if (intent.kind === "create-spec" || intent.kind === "create-impl") {
+  if (
+    intent.kind === "create-spec" ||
+    intent.kind === "create-impl" ||
+    intent.kind === "iterate-spec"
+  ) {
     try {
       // Mint an installation token so the handler can `git push` and
       // give the agent's Bash subprocess a GH_TOKEN for `gh issue view`.
@@ -165,12 +170,22 @@ const dispatch = async (
           gitPushToken: token,
           log,
         });
-      } else {
+      } else if (intent.kind === "create-impl") {
         await handleCreateImpl({
           owner: context.repo().owner,
           repo: context.repo().repo,
           mode: "sequential",
           specPrNumber: intent.specPrNumber,
+          octokit: context.octokit as any,
+          gitPushToken: token,
+          log,
+        });
+      } else {
+        // iterate-spec
+        await handleIterateSpec({
+          owner: context.repo().owner,
+          repo: context.repo().repo,
+          specPrNumber: intent.prNumber,
           octokit: context.octokit as any,
           gitPushToken: token,
           log,
