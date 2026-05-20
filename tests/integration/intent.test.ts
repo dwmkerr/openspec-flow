@@ -182,6 +182,10 @@ describe("dispatcher integration", () => {
     const passed = mockHandler.mock.calls[0][0];
     expect(passed.issueNumber).toBe(42);
     expect(passed.issueTitle).toBe("Add CSV export");
+    expect(passed.owner).toBe("dwmkerr");
+    expect(passed.repo).toBe("openspec-flow");
+    expect(typeof passed.octokit).toBe("object");
+    expect(passed.gitPushToken).toBeTruthy();
     expect(typeof passed.log.info).toBe("function");
   });
 

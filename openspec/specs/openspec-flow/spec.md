@@ -8,9 +8,7 @@ lifecycle — **plan**, **implement**, and **respond** — from a single file
 events into OpenSpec stages, drives Claude Code to produce the artifacts
 and code, and maintains the issue/PR label lifecycle so humans know
 exactly what state each piece of work is in.
-
 ## Requirements
-
 ### Requirement: Single workflow file owns the full OpenSpec lifecycle
 
 The system SHALL implement the complete OpenSpec automation lifecycle —
@@ -189,3 +187,16 @@ discussion."
   issue or PR
 - **THEN** the final two lines of the comment body SHALL be `---` and
   the re-engagement footer, in that order
+
+### Requirement: The create-spec beat opens a real spec PR
+
+The bot SHALL open a pull request labelled `openspec:spec` on branch `chore/<n>-<slug>` with a body containing the auto-maintained metadata block linking back to the issue, and SHALL then comment on the originating issue with the spec PR number, whenever a user adds `openspec:go` to an open issue and the agent runs to completion.
+
+#### Scenario: Happy-path create-spec
+- **GIVEN** an open issue #N with the `openspec:go` label freshly
+  applied
+- **WHEN** the bot processes the event
+- **THEN** a spec PR is opened against `main` carrying the
+  `openspec:spec` label and the issue receives a comment
+  `spec PR opened: #M`
+

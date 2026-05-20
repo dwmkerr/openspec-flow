@@ -124,9 +124,20 @@ const dispatch = async (
   // crashes the webhook (Probot would otherwise retry on throw).
   if (intent.kind === "create-spec") {
     try {
+      // Mint an installation token so the handler can `git push` and
+      // give the agent's Bash subprocess a GH_TOKEN for `gh issue view`.
+      const auth = (await context.octokit.auth({ type: "installation" })) as {
+        token?: string;
+      };
+      const token = auth?.token;
+      if (!token) throw new Error("could not obtain installation token");
       await handleCreateSpec({
+        owner: context.repo().owner,
+        repo: context.repo().repo,
         issueNumber: intent.issueNumber,
         issueTitle: intent.title,
+        octokit: context.octokit as any,
+        gitPushToken: token,
         log: {
           info: (m: string) => context.log.info(m),
           warn: (m: string) => context.log.warn(m),
