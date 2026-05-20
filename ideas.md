@@ -5,6 +5,7 @@
 - [ ] Bash deny-list hook for paranoid mode (prevent `git`/`gh pr`/`gh push` from agent's Bash even if it's prompted to use them). Defence in depth.
 - [ ] Chained mode: rebase impl branch when spec branch force-pushes. Currently the impl diff goes stale; manual reset needed. Detect divergence and offer auto-rebase or visible warning.
 - [ ] Re-trigger impl on existing PR: update PR body / re-push commits rather than blind force-push. Idempotency for openspec:go on a spec PR that already has a stacked impl PR.
+- [ ] Slim the pino-http req serializer to `{id, method, url}` only. Default includes 16 headers + query + params per request — 27 such records per impl run blows the dev pane. One-line fix in src/logger.ts.
 
 - [ ] learn and improve flow: reviews an openspec flow and suggests improvements to skills/agents/etc
 - [ ] zero shot issues

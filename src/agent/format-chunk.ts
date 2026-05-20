@@ -14,7 +14,20 @@ import chalk from "chalk";
 // type-only import to read its types without forcing an actual import.
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk" with { "resolution-mode": "import" };
 
-export const getTermWidth = (): number => process.stdout.columns || 80;
+// pino-pretty is configured in src/logger.ts to drop pid, hostname,
+// and name. That collapses its line prefix to exactly:
+//     [HH:MM:SS.mmm] LEVEL:<space>
+// which is 22 characters at its widest (LEVEL ∈ {INFO,WARN,ERROR}).
+// We reserve 24 here — 2 chars of safety — and the math becomes
+// deterministic: format-chunk's truncation produces lines that
+// always fit on one terminal row.
+//
+// If logger.ts's `ignore` list changes, this constant must change
+// with it. They are deliberately co-located in comments.
+const PINO_PREFIX_RESERVE = 24;
+
+export const getTermWidth = (): number =>
+  Math.max(40, (process.stdout.columns || 80) - PINO_PREFIX_RESERVE);
 
 // Truncate so the formatted line fits the terminal after prefix + indent.
 // Floors at 20 chars so very narrow terms still print something readable.
