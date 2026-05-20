@@ -44,6 +44,21 @@ export const checkoutNewBranch = (workdir: string, branch: string): void => {
   run(["checkout", "-B", branch], workdir);
 };
 
+// Used by chained-mode impl: fetch the spec branch from origin and
+// check it out so the workdir reflects spec changes before we ask
+// the agent to implement on top.
+export const fetchAndCheckoutBranch = (workdir: string, branch: string): void => {
+  run(["fetch", "origin", branch], workdir);
+  run(["checkout", branch], workdir);
+};
+
+// Pure git status check used to verify the agent actually modified
+// the working tree. Returns trimmed porcelain output; empty string
+// means nothing changed.
+export const statusPorcelain = (workdir: string): string => {
+  return run(["status", "--porcelain"], workdir).trim();
+};
+
 export const addAll = (workdir: string): void => {
   run(["add", "-A"], workdir);
 };

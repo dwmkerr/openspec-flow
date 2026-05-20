@@ -142,6 +142,21 @@ The slug is a kebab-case rendering of the issue title. The impl prefix is
 Both modes implement the same flow above. They are functionally equivalent
 from the user's perspective.
 
+## Chained mode (opt-in)
+
+The bot ships two execution modes for the spec→impl handoff:
+
+| Mode | When | Trigger for `create-impl` |
+|---|---|---|
+| Sequential (default) | `OPENSPEC_FLOW_CHAINED_MODE` unset or `false` | Spec PR merges to main → classifier emits `create-impl` |
+| Chained (opt-in) | `OPENSPEC_FLOW_CHAINED_MODE=true` | `create-spec` invokes `create-impl` directly after opening the spec PR; impl PR stacks on the spec branch |
+
+Chained mode is primarily for development — see the whole chain run
+without merging spec first. GitHub auto-retargets the stacked impl
+PR's base to `main` when the spec PR merges. Production should stay
+on sequential mode: the merge gate between spec and impl is the
+review point.
+
 ## What must stay in sync
 
 When any of the following change, update this file in the same commit:
