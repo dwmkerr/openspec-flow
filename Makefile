@@ -8,6 +8,11 @@ help: # Show help for each of the Makefile recipes.
 dev: # Run the Probot dev server with hot reload.
 	npm run dev
 
+.PHONY: dev-log
+dev-log: # Run dev with full output tee'd to logs/dev-<ts>.log.
+	@mkdir -p logs
+	npm run dev 2>&1 | tee logs/dev-$(shell date +%Y%m%dT%H%M%S).log
+
 .PHONY: tunnel
 tunnel: # Run the ngrok tunnel for local webhook delivery.
 	npm run dev:tunnel

@@ -4,9 +4,6 @@
 
 import { execFileSync } from "node:child_process";
 
-const lastLine = (s: string): string =>
-  s.split("\n").filter(Boolean).slice(-1)[0] ?? s;
-
 const run = (args: string[], cwd?: string): string => {
   try {
     return execFileSync("git", args, {
@@ -15,8 +12,12 @@ const run = (args: string[], cwd?: string): string => {
       stdio: ["ignore", "pipe", "pipe"],
     }).toString();
   } catch (err: any) {
-    const stderr = (err.stderr ?? "").toString();
-    throw new Error(`git ${args[0]} failed: ${lastLine(stderr) || err.message}`);
+    // Surface the full stderr so push refusals / lease failures /
+    // permission errors all carry diagnostic detail. A trimmed
+    // "failed to push some refs" line throws away the actual reason
+    // git printed underneath it.
+    const stderr = (err.stderr ?? "").toString().trim();
+    throw new Error(`git ${args[0]} failed:\n${stderr || err.message}`);
   }
 };
 
