@@ -69,20 +69,25 @@ export const commit = (workdir: string, message: string): void => {
 };
 
 export const pushBranch = (workdir: string, branch: string): void => {
-  // Fetch the current remote ref so --force-with-lease has a real
-  // lease to compare against. A fresh workdir has no local view of
-  // origin/<branch>; without this fetch, force-with-lease refuses
-  // every re-trigger as a stale-lease violation. If the remote
-  // branch doesn't exist yet (first push), the fetch fails — swallow
-  // it and let the push create the branch.
-  try {
-    run(["fetch", "origin", branch], workdir);
-  } catch {
-    // remote branch doesn't exist yet — first push will create it
+  // Look up the remote tip directly via ls-remote so we can pass an
+  // EXPLICIT lease to push. The bare `--force-with-lease` form relies
+  // on a local remote-tracking ref that our shallow / single-branch
+  // clone doesn't maintain for branches other than `main`, which
+  // makes it refuse every push as "stale info" even right after a
+  // fetch. The explicit `--force-with-lease=<branch>:<sha>` form
+  // sidesteps that — and still protects against concurrent writers
+  // because if someone pushed between our ls-remote and our push,
+  // the SHA they wrote won't match the SHA we passed.
+  const lsRemote = run(["ls-remote", "origin", `refs/heads/${branch}`], workdir).trim();
+  const remoteSha = lsRemote ? lsRemote.split(/\s+/)[0] : "";
+
+  if (remoteSha) {
+    run(
+      ["push", `--force-with-lease=${branch}:${remoteSha}`, "-u", "origin", branch],
+      workdir,
+    );
+  } else {
+    // First push for this branch — nothing to lease against.
+    run(["push", "-u", "origin", branch], workdir);
   }
-  // --force-with-lease still protects against concurrent writers
-  // (e.g. a reviewer pushing a fix to the spec PR branch). If the
-  // lease fails, the handler catches the error and posts a visible
-  // failure comment so the operator can switch to iterate-spec.
-  run(["push", "--force-with-lease", "-u", "origin", branch], workdir);
 };
