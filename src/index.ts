@@ -4,6 +4,7 @@ import { handleCreateSpec } from "./handlers/create-spec/index.js";
 import { handleCreateImpl } from "./handlers/create-impl/index.js";
 import { handleIterateSpec } from "./handlers/iterate-spec/index.js";
 import { createStatusComment } from "./handlers/shared/status-comment.js";
+import { statusReceived } from "./handlers/shared/status-bodies.js";
 
 // openspec-flow Probot entry point.
 //
@@ -123,11 +124,11 @@ const dispatch = async (
 
   // One sticky status comment per intent. Body mutates from
   // receipt → working → terminal state as the handler progresses.
-  // Visible noops are terminal: the body is just the reason.
+  // Working states show the animated GIF; terminal states drop it
+  // (the comment "stops moving" once work stops). Visible noops are
+  // terminal: the body is just the reason.
   const body =
-    intent.kind === "noop"
-      ? summary
-      : `👀 openspec-flow received: ${summary}. Starting…`;
+    intent.kind === "noop" ? summary : statusReceived(summary);
 
   let statusCommentId: number | undefined;
   try {

@@ -27,6 +27,12 @@ import {
 import { summariseProposal } from "../create-spec/changes.js";
 import { parseSpecPrMetadata } from "../shared/spec-pr-metadata.js";
 import { updateStatusComment } from "../shared/status-comment.js";
+import {
+  statusImplementing,
+  statusPushing,
+  statusImplPrOpened,
+  statusFailure,
+} from "../shared/status-bodies.js";
 import { verifyImplWorkdir } from "./verify.js";
 import type { MinimalOctokit as SpecMinimalOctokit } from "../create-spec/index.js";
 
@@ -174,7 +180,7 @@ export const handleCreateImpl = async (
       repo: `${opts.owner}/${opts.repo}`,
     });
 
-    await setStatus(`📖 implementing change \`${changeName}\` for issue #${resolvedIssue}…`);
+    await setStatus(statusImplementing(changeName, resolvedIssue));
 
     const headBefore = headSha(workdir);
 
@@ -201,7 +207,7 @@ export const handleCreateImpl = async (
     }
     opts.log.info(`create-impl: workdir verified — change archived, committed`);
 
-    await setStatus(`🔧 agent finished, pushing branch…`);
+    await setStatus(statusPushing());
 
     pushBranch(workdir, branch);
     opts.log.info(`create-impl: pushed ${branch}`);
@@ -238,13 +244,13 @@ export const handleCreateImpl = async (
       labels: ["openspec:impl"],
     });
 
-    await setStatus(`✅ impl PR opened: #${pr.data.number}`);
+    await setStatus(statusImplPrOpened(pr.data.number));
 
     opts.log.info(`create-impl: done — ${pr.data.html_url}`);
     return { prNumber: pr.data.number, prUrl: pr.data.html_url };
   } catch (err) {
     const msg = (err as Error).message;
-    const failure = `❌ openspec-flow failed: ${msg}. See dev logs for trace.`;
+    const failure = statusFailure(msg);
     await setStatus(failure);
     // If the failure occurred AFTER the impl PR was already opened,
     // also drop a comment on the impl PR itself — the status comment

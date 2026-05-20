@@ -19,6 +19,12 @@ import {
 import { listNewChanges, summariseProposal } from "./changes.js";
 import { buildSpecPrBody } from "./pr.js";
 import { updateStatusComment } from "../shared/status-comment.js";
+import {
+  statusReadingIssue,
+  statusPushing,
+  statusSpecPrOpened,
+  statusFailure,
+} from "../shared/status-bodies.js";
 
 const PROMPT_TEMPLATE = readFileSync(join(__dirname, "prompt.md"), "utf8");
 
@@ -121,7 +127,7 @@ export const handleCreateSpec = async (
       repo: `${opts.owner}/${opts.repo}`,
     });
 
-    await setStatus(`📖 reading context for issue #${opts.issueNumber}…`);
+    await setStatus(statusReadingIssue(opts.issueNumber));
 
     const headBefore = headSha(workdir);
 
@@ -149,7 +155,7 @@ export const handleCreateSpec = async (
     const changeName = changes[0];
     opts.log.info(`create-spec: agent produced change "${changeName}"${changes.length > 1 ? ` (+${changes.length - 1} more)` : ""}`);
 
-    await setStatus(`🔧 agent finished, pushing branch…`);
+    await setStatus(statusPushing());
 
     pushBranch(workdir, branch);
     opts.log.info(`create-spec: pushed ${branch}`);
@@ -176,7 +182,7 @@ export const handleCreateSpec = async (
       labels: ["openspec:spec"],
     });
 
-    await setStatus(`✅ spec PR opened: #${pr.data.number}`);
+    await setStatus(statusSpecPrOpened(pr.data.number));
 
     opts.log.info(`create-spec: done — ${pr.data.html_url}`);
 
@@ -210,9 +216,7 @@ export const handleCreateSpec = async (
     return { prNumber: pr.data.number, prUrl: pr.data.html_url };
   } catch (err) {
     const msg = (err as Error).message;
-    await setStatus(
-      `❌ openspec-flow failed: ${msg}. See dev logs for trace.`,
-    );
+    await setStatus(statusFailure(msg));
     throw err;
   } finally {
     if (workdir) removeWorkdir(workdir);

@@ -158,7 +158,7 @@ describe("handleCreateSpec", () => {
       (c: any) => c[0].startsWith("PATCH /repos/"),
     );
     const finalPatch = patchCalls[patchCalls.length - 1];
-    expect(finalPatch[1].body).toContain("❌ openspec-flow failed");
+    expect(finalPatch[1].body).toContain("⚠️ openspec-flow failed");
     expect(opts.octokit.issues.createComment).not.toHaveBeenCalled();
   });
 
@@ -175,7 +175,7 @@ describe("handleCreateSpec", () => {
       (c: any) => c[0].startsWith("PATCH /repos/"),
     );
     const finalPatch = patchCalls[patchCalls.length - 1];
-    expect(finalPatch[1].body).toContain("❌ openspec-flow failed");
+    expect(finalPatch[1].body).toContain("⚠️ openspec-flow failed");
     expect(opts.octokit.issues.createComment).not.toHaveBeenCalled();
     expect(removeWorkdir).toHaveBeenCalled();
   });

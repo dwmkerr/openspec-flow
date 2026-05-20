@@ -18,6 +18,12 @@ import {
 } from "../create-spec/git.js";
 import { parseSpecPrMetadata } from "../shared/spec-pr-metadata.js";
 import { updateStatusComment } from "../shared/status-comment.js";
+import {
+  statusReadingPr,
+  statusPushing,
+  statusSpecUpdated,
+  statusFailure,
+} from "../shared/status-bodies.js";
 import { verifyIterateWorkdir } from "./verify.js";
 import type { MinimalOctokit } from "../create-impl/index.js";
 
@@ -104,7 +110,7 @@ export const handleIterateSpec = async (
       repo: `${opts.owner}/${opts.repo}`,
     });
 
-    await setStatus(`📖 reading review context for PR #${opts.specPrNumber}…`);
+    await setStatus(statusReadingPr(opts.specPrNumber));
 
     const headBefore = headSha(workdir);
 
@@ -131,19 +137,17 @@ export const handleIterateSpec = async (
     }
     opts.log.info(`iterate-spec: workdir verified — change updated, committed`);
 
-    await setStatus(`🔧 agent finished, pushing branch…`);
+    await setStatus(statusPushing());
 
     pushBranch(workdir, branch);
     opts.log.info(`iterate-spec: pushed ${branch}`);
 
-    await setStatus("✅ spec updated by openspec-flow");
+    await setStatus(statusSpecUpdated());
 
     opts.log.info(`iterate-spec: done`);
   } catch (err) {
     const msg = (err as Error).message;
-    await setStatus(
-      `❌ openspec-flow failed: ${msg}. See dev logs for trace.`,
-    );
+    await setStatus(statusFailure(msg));
     throw err;
   } finally {
     if (workdir) removeWorkdir(workdir);
