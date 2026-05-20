@@ -1,5 +1,6 @@
 import type { Context, Probot } from "probot";
 import { Intent, classify, describe } from "./intent.js";
+import { handleCreateSpec } from "./handlers/create-spec/index.js";
 
 // openspec-flow Probot entry point.
 //
@@ -117,6 +118,27 @@ const dispatch = async (
     issue_number: issueNumber,
     body,
   });
+
+  // Route actionable intents to their handlers. Handlers are bounded
+  // best-effort: errors are caught and logged so a logic bug never
+  // crashes the webhook (Probot would otherwise retry on throw).
+  if (intent.kind === "create-spec") {
+    try {
+      await handleCreateSpec({
+        issueNumber: intent.issueNumber,
+        issueTitle: intent.title,
+        log: {
+          info: (m: string) => context.log.info(m),
+          warn: (m: string) => context.log.warn(m),
+        },
+      });
+    } catch (err) {
+      context.log.error(
+        { ...eventContext(context), err: (err as Error).message },
+        "create-spec handler failed",
+      );
+    }
+  }
 };
 
 const reactEyes = async (
