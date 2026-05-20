@@ -83,6 +83,35 @@ Register `openspec-flow` as a GitHub App. Users click "Install" on the org/repo.
 Pros: `openspec-flow[bot]` identity, sub-10s response, can update workflow files, central upgrade path.
 Cons: hosting bill (~$3–7/mo on Fly.io), secrets management, more moving parts.
 
+## create-spec handler — agent / bot split
+
+The `create-spec` handler is the first real beat. Two parts:
+
+- **Agent (Claude Agent SDK)** drafts the OpenSpec change. Runs in a cloned target repo, uses the `openspec-new-change` skill that the target repo ships under `.claude/skills/`. Fetches issue context itself via `gh issue view --comments`.
+- **Bot (handler code)** does the deterministic mechanics: clones the repo, configures git identity, validates preconditions, runs the agent, then branches / commits / pushes / opens the PR via Octokit / labels it `openspec:spec` / comments the PR number back on the issue.
+
+The split keeps the prompt small, keeps Claude away from `GH_TOKEN` for PR creation (the bot owns Octokit auth), and makes failure modes predictable. Branch slug + commit message + PR body metadata block are all derived in code, never from Claude's output.
+
+Failure surface: any exception inside the handler turns into one comment on the originating issue (`❌ openspec-flow couldn't open a spec PR: <error>`) and the workdir is removed unless `OPENSPEC_FLOW_KEEP_WORKDIR=true`.
+
+### Workdir lifecycle
+
+Each invocation gets its own ephemeral checkout at `$OPENSPEC_FLOW_WORKDIR/<issue-N>-<unix-ts>` (default base `/tmp/openspec-flow`). Cloned shallow (`--depth 50`), removed on exit. Keep with `OPENSPEC_FLOW_KEEP_WORKDIR=true` for post-mortem.
+
+### Auth surfaces
+
+| Mode | Octokit | Token for git push + agent's `GH_TOKEN` |
+|---|---|---|
+| App / Probot | `context.octokit` (per-event installation token) | minted via `context.octokit.auth({ type: "installation" })` |
+| CLI / local | `Octokit` constructed from `gh auth token` | same `gh auth token` value |
+| Action (future) | `Octokit` from `GITHUB_TOKEN` | same `GITHUB_TOKEN` |
+
+Claude never sees the token directly. The handler passes it as `GH_TOKEN` env to the agent's Bash subprocess so `gh issue view --comments` succeeds without a login prompt.
+
+### Why the bot owns git + PR mechanics
+
+Anything deterministic (branch naming, commit format, PR body metadata block, labelling) is shipped by code. Anything that needs reading and drafting (issue context → OpenSpec artefacts) is the agent's job. This minimises Claude's tool surface, eliminates token exposure for the PR step, and means a single regex/format change ripples to one place — not a re-prompt.
+
 ## Framework choice
 
 **Probot** (TypeScript, v14.3.2 as of April 2026). Actively maintained, wraps `@octokit/app` + `@octokit/webhooks`, handles JWT auth and per-installation tokens, has built-in fixture replay (`probot receive`). Smaller projects use raw `@octokit/app` + Hono but Probot saves ~500 lines of plumbing and is well-trodden.

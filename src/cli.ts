@@ -91,13 +91,25 @@ export const runCli = async (argv: string[]): Promise<number> => {
   if (args.intent === "create-spec") {
     const issue = Number(requireFlag(args.flags, "issue"));
     const repo = requireFlag(args.flags, "repo");
+    const [owner, name] = repo.split("/");
+    if (!owner || !name) throw new Error(`--repo must be owner/name (got "${repo}")`);
     const title = fetchIssueTitle(repo, issue);
-    const reply = await handleCreateSpec({
+    const { Octokit } = await import("@octokit/rest");
+    const token = execSync("gh auth token", { encoding: "utf8" }).trim();
+    if (!token) throw new Error("gh auth token returned empty; run `gh auth login`");
+    const octokit = new Octokit({ auth: token });
+    const result = await handleCreateSpec({
+      owner,
+      repo: name,
       issueNumber: issue,
       issueTitle: title,
+      octokit: octokit as any,
+      gitPushToken: token,
       log: stdoutLogger,
     });
-    process.stdout.write("\n--- final reply ---\n" + reply + "\n");
+    if (result) {
+      process.stdout.write(`\nspec PR opened: ${result.prUrl}\n`);
+    }
     return 0;
   }
 
