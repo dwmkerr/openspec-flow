@@ -63,6 +63,13 @@ export const statusPorcelain = (workdir: string): string => {
   return run(["status", "--porcelain"], workdir).trim();
 };
 
+// HEAD sha — used to detect whether the agent committed during a
+// handler run (snapshot before agent, compare after). The agent
+// owns commit; the harness only checks that something happened.
+export const headSha = (workdir: string): string => {
+  return run(["rev-parse", "HEAD"], workdir).trim();
+};
+
 export const addAll = (workdir: string): void => {
   run(["add", "-A"], workdir);
 };

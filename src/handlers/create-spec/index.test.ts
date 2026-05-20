@@ -10,14 +10,18 @@ jest.mock("./preconditions", () => ({
   assertOpenSpecCli: jest.fn(),
   assertSkillPresent: jest.fn(),
 }));
-jest.mock("./git", () => ({
-  cloneRepo: jest.fn(),
-  configIdentity: jest.fn(),
-  checkoutNewBranch: jest.fn(),
-  addAll: jest.fn(),
-  commit: jest.fn(),
-  pushBranch: jest.fn(),
-}));
+jest.mock("./git", () => {
+  let counter = 0;
+  return {
+    cloneRepo: jest.fn(),
+    configIdentity: jest.fn(),
+    checkoutNewBranch: jest.fn(),
+    pushBranch: jest.fn(),
+    // headSha returns different values on subsequent calls so the
+    // "HEAD moved" check passes by default. Tests can override.
+    headSha: jest.fn(() => `sha-${++counter}`),
+  };
+});
 jest.mock("./changes", () => ({
   listNewChanges: jest.fn(),
   summariseProposal: jest.fn(() => "Adds CSV export to orders page."),
@@ -29,7 +33,7 @@ import {
   cloneRepo,
   configIdentity,
   checkoutNewBranch,
-  commit,
+  headSha,
   pushBranch,
 } from "./git.js";
 import { assertOpenSpecCli, assertSkillPresent } from "./preconditions.js";
@@ -86,10 +90,6 @@ describe("handleCreateSpec", () => {
       "/tmp/openspec-flow/test-wd",
       "chore/10-add-csv-export",
     );
-    expect(commit).toHaveBeenCalledWith(
-      "/tmp/openspec-flow/test-wd",
-      "chore: Add CSV export",
-    );
     expect(pushBranch).toHaveBeenCalledWith(
       "/tmp/openspec-flow/test-wd",
       "chore/10-add-csv-export",
@@ -133,6 +133,22 @@ describe("handleCreateSpec", () => {
 
     const env = opts.runner.mock.calls[0][0].options.env;
     expect(env.GH_TOKEN).toBe("token");
+  });
+
+  it("aborts and posts failure comment when agent didn't commit", async () => {
+    (headSha as jest.Mock).mockReturnValueOnce("same-sha").mockReturnValueOnce("same-sha");
+    const opts = baseOpts();
+
+    await expect(handleCreateSpec(opts)).rejects.toThrow(
+      "agent didn't commit any changes",
+    );
+    expect(pushBranch).not.toHaveBeenCalled();
+    expect(opts.octokit.pulls.create).not.toHaveBeenCalled();
+    expect(opts.octokit.issues.createComment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.stringContaining("❌ openspec-flow couldn't open a spec PR"),
+      }),
+    );
   });
 
   it("aborts and posts failure comment when agent produces no change", async () => {

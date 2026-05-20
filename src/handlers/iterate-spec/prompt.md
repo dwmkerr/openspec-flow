@@ -30,5 +30,9 @@ repo `{{repo}}`. A reviewer has requested iteration.
 
 3. Run `openspec validate {{changeName}}` until it passes.
 
-The surrounding harness will commit and push the updated branch
-back to `{{branch}}`. Make local changes only.
+4. **Commit when done.** Stage your changes with `git add` and
+   make a commit whose message describes *what this iteration
+   changed* (e.g. "clarify multi-line handling", "tighten failure
+   contract"). Follow the conventions in the repo's `CLAUDE.md`
+   (if any). The harness will push your commit to `{{branch}}` —
+   don't push yourself.

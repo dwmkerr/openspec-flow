@@ -10,14 +10,16 @@ jest.mock("../create-spec/preconditions", () => ({
   assertOpenSpecCli: jest.fn(),
   assertSkillPresent: jest.fn(),
 }));
-jest.mock("../create-spec/git", () => ({
-  cloneRepo: jest.fn(),
-  configIdentity: jest.fn(),
-  fetchAndCheckoutBranch: jest.fn(),
-  addAll: jest.fn(),
-  commit: jest.fn(),
-  pushBranch: jest.fn(),
-}));
+jest.mock("../create-spec/git", () => {
+  let counter = 0;
+  return {
+    cloneRepo: jest.fn(),
+    configIdentity: jest.fn(),
+    fetchAndCheckoutBranch: jest.fn(),
+    pushBranch: jest.fn(),
+    headSha: jest.fn(() => `sha-${++counter}`),
+  };
+});
 jest.mock("./verify", () => ({
   verifyIterateWorkdir: jest.fn(() => ({ ok: true })),
 }));
@@ -26,7 +28,7 @@ import { handleIterateSpec } from "./index.js";
 import {
   cloneRepo,
   fetchAndCheckoutBranch,
-  commit,
+  headSha,
   pushBranch,
 } from "../create-spec/git.js";
 import { assertSkillPresent } from "../create-spec/preconditions.js";
@@ -86,10 +88,6 @@ describe("handleIterateSpec", () => {
       "chore/26-rfc-shim",
     );
     expect(opts.runner).toHaveBeenCalledTimes(1);
-    expect(commit).toHaveBeenCalledWith(
-      "/tmp/openspec-flow/iterate-test-wd",
-      "chore: iterate spec for #26",
-    );
     expect(pushBranch).toHaveBeenCalledWith(
       "/tmp/openspec-flow/iterate-test-wd",
       "chore/26-rfc-shim",
@@ -154,19 +152,28 @@ describe("handleIterateSpec", () => {
     expect(opts.runner).not.toHaveBeenCalled();
   });
 
-  it("aborts when verify fails (e.g. agent produced no changes)", async () => {
+  it("aborts when agent didn't commit (HEAD unchanged)", async () => {
+    (headSha as jest.Mock).mockReturnValueOnce("same-sha").mockReturnValueOnce("same-sha");
+    const opts = baseOpts();
+
+    await expect(handleIterateSpec(opts)).rejects.toThrow(
+      "agent didn't commit any changes",
+    );
+    expect(pushBranch).not.toHaveBeenCalled();
+  });
+
+  it("aborts when verify fails (e.g. agent accidentally archived)", async () => {
     (verifyIterateWorkdir as jest.Mock).mockReturnValueOnce({
       ok: false,
-      reason: "agent produced no changes",
+      reason: "change directory no longer exists",
     });
     const opts = baseOpts();
 
-    await expect(handleIterateSpec(opts)).rejects.toThrow("agent produced no changes");
-    expect(commit).not.toHaveBeenCalled();
+    await expect(handleIterateSpec(opts)).rejects.toThrow("change directory no longer exists");
     expect(pushBranch).not.toHaveBeenCalled();
     expect(opts.octokit.issues.createComment).toHaveBeenCalledWith(
       expect.objectContaining({
-        body: expect.stringContaining("agent produced no changes"),
+        body: expect.stringContaining("change directory no longer exists"),
       }),
     );
   });

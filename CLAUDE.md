@@ -224,6 +224,8 @@ This is the contract. When in doubt, run `openspec list --json` and
 
 ## Patterns
 
+- **Agent owns prose, harness owns mechanics.** Anything that needs drafting (artefacts, commit messages, PR bodies) is the agent's job. Anything deterministic (branch naming, push, label, PR open, comment) is the harness'. Commit is the agent's because the message needs to be grounded in what the agent did; push is the harness' because it's pure mechanics.
+- **Don't try to extract structured data from agent output.** No regex on replies, no agent-writes-file-the-harness-parses contracts. The agent emits prose into the workdir (commits, artefacts) and the harness reads the workdir's *git/filesystem* state — never the agent's reply text.
 - Use `@octokit/webhooks-types` for payload types. Don't hand-roll interfaces.
 - Parse structured text (YAML, JSON) with a real parser. Don't reach for regex.
 - Test scripts in `tests/scripts/` identify their artefacts by a unique `test:<scenario>` label so runs are isolated and idempotent. They also apply the shared `test:fixture` marker; `make test-cleanup` deletes anything carrying it.

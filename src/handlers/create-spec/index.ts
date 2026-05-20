@@ -13,8 +13,7 @@ import {
   cloneRepo,
   configIdentity,
   checkoutNewBranch,
-  addAll,
-  commit,
+  headSha,
   pushBranch,
 } from "./git.js";
 import { listNewChanges, summariseProposal } from "./changes.js";
@@ -103,6 +102,13 @@ export const handleCreateSpec = async (
     cloneRepo(`${opts.owner}/${opts.repo}`, workdir, opts.gitPushToken);
     configIdentity(workdir, identity.name, identity.email);
 
+    // Pre-create the branch so the agent commits directly onto it.
+    // Harness does branch + push deterministically; agent does the
+    // commit (the message needs prose the agent is best placed to
+    // write).
+    const branch = branchName(opts.issueNumber, opts.issueTitle);
+    checkoutNewBranch(workdir, branch);
+
     assertOpenSpecCli();
     assertSkillPresent(workdir);
 
@@ -112,21 +118,24 @@ export const handleCreateSpec = async (
       repo: `${opts.owner}/${opts.repo}`,
     });
 
+    const headBefore = headSha(workdir);
+
     await run({
       prompt,
       cwd: workdir,
       log: opts.log,
       options: {
-        // Unattended run: skip permission prompts for Bash etc. The
-        // workdir is throw-away and the agent has no network egress
-        // beyond the tools we already trust (gh, openspec, git via
-        // the bot's own steps).
         permissionMode: "bypassPermissions",
-        // Inject GH_TOKEN so the agent's `gh issue view` succeeds.
-        // Claude never logs env values; this is just subprocess inherit.
         env: { ...process.env, GH_TOKEN: opts.gitPushToken },
       } as any,
     });
+
+    const headAfter = headSha(workdir);
+    if (headBefore === headAfter) {
+      throw new Error(
+        "agent didn't commit any changes — HEAD is unchanged after the run",
+      );
+    }
 
     const changes = listNewChanges(workdir);
     if (changes.length === 0) {
@@ -135,10 +144,6 @@ export const handleCreateSpec = async (
     const changeName = changes[0];
     opts.log.info(`create-spec: agent produced change "${changeName}"${changes.length > 1 ? ` (+${changes.length - 1} more)` : ""}`);
 
-    const branch = branchName(opts.issueNumber, opts.issueTitle);
-    checkoutNewBranch(workdir, branch);
-    addAll(workdir);
-    commit(workdir, `chore: ${opts.issueTitle}`);
     pushBranch(workdir, branch);
     opts.log.info(`create-spec: pushed ${branch}`);
 

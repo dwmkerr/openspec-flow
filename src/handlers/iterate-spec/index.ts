@@ -13,8 +13,7 @@ import {
   cloneRepo,
   configIdentity,
   fetchAndCheckoutBranch,
-  addAll,
-  commit,
+  headSha,
   pushBranch,
 } from "../create-spec/git.js";
 import { parseSpecPrMetadata } from "../shared/spec-pr-metadata.js";
@@ -105,6 +104,8 @@ export const handleIterateSpec = async (
       repo: `${opts.owner}/${opts.repo}`,
     });
 
+    const headBefore = headSha(workdir);
+
     await run({
       prompt,
       cwd: workdir,
@@ -115,14 +116,19 @@ export const handleIterateSpec = async (
       } as any,
     });
 
+    const headAfter = headSha(workdir);
+    if (headBefore === headAfter) {
+      throw new Error(
+        "agent didn't commit any changes — HEAD is unchanged after the run",
+      );
+    }
+
     const verify = verifyIterateWorkdir(workdir, changeName);
     if (!verify.ok) {
       throw new Error(verify.reason!);
     }
-    opts.log.info(`iterate-spec: workdir verified — change updated`);
+    opts.log.info(`iterate-spec: workdir verified — change updated, committed`);
 
-    addAll(workdir);
-    commit(workdir, `chore: iterate spec for #${issueNumber}`);
     pushBranch(workdir, branch);
     opts.log.info(`iterate-spec: pushed ${branch}`);
 
