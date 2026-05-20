@@ -43,6 +43,8 @@ const buildOctokit = (specBody = "") => ({
     createComment: jest.fn().mockResolvedValue({}),
     addLabels: jest.fn().mockResolvedValue({}),
   },
+  // Raw request() handles status comment PATCHes.
+  request: jest.fn().mockResolvedValue({ data: {} }),
   pulls: {
     get: jest.fn().mockResolvedValue({
       data: {
@@ -69,6 +71,8 @@ const sequentialOpts = (overrides: Partial<any> = {}) => ({
   gitPushToken: "token",
   log: { info: jest.fn(), warn: jest.fn() },
   runner: jest.fn().mockResolvedValue("done"),
+  statusCommentId: 555,
+  statusTargetNumber: 10,
   ...overrides,
 });
 
@@ -85,6 +89,8 @@ const chainedOpts = (overrides: Partial<any> = {}) => ({
   gitPushToken: "token",
   log: { info: jest.fn(), warn: jest.fn() },
   runner: jest.fn().mockResolvedValue("done"),
+  statusCommentId: 555,
+  statusTargetNumber: 10,
   ...overrides,
 });
 
@@ -120,12 +126,14 @@ describe("handleCreateImpl", () => {
       expect(opts.octokit.issues.addLabels).toHaveBeenCalledWith(
         expect.objectContaining({ labels: ["openspec:impl"] }),
       );
-      expect(opts.octokit.issues.createComment).toHaveBeenCalledWith(
-        expect.objectContaining({
-          issue_number: 10,
-          body: "impl PR opened: #99",
-        }),
+      // Terminal status PATCHed; no separate "impl PR opened" comment.
+      const patchCalls = opts.octokit.request.mock.calls.filter(
+        (c: any) => c[0].startsWith("PATCH /repos/"),
       );
+      const finalPatch = patchCalls[patchCalls.length - 1];
+      expect(finalPatch[1].comment_id).toBe(555);
+      expect(finalPatch[1].body).toBe("✅ impl PR opened: #99");
+      expect(opts.octokit.issues.createComment).not.toHaveBeenCalled();
     });
 
     it("aborts and posts failure when spec PR body has no metadata block", async () => {
@@ -176,11 +184,10 @@ describe("handleCreateImpl", () => {
       await expect(handleCreateImpl(opts)).rejects.toThrow("change directory still exists");
       expect(pushBranch).not.toHaveBeenCalled();
       expect(opts.octokit.pulls.create).not.toHaveBeenCalled();
-      expect(opts.octokit.issues.createComment).toHaveBeenCalledWith(
-        expect.objectContaining({
-          body: expect.stringContaining("❌ openspec-flow couldn't open an impl PR"),
-        }),
+      const patchCalls = opts.octokit.request.mock.calls.filter(
+        (c: any) => c[0].startsWith("PATCH /repos/"),
       );
+      expect(patchCalls[patchCalls.length - 1][1].body).toContain("change directory still exists");
     });
 
     it("posts failure comment when preconditions fail", async () => {
@@ -191,24 +198,29 @@ describe("handleCreateImpl", () => {
 
       await expect(handleCreateImpl(opts)).rejects.toThrow("openspec-new-change skill");
       expect(opts.runner).not.toHaveBeenCalled();
-      expect(opts.octokit.issues.createComment).toHaveBeenCalledWith(
-        expect.objectContaining({ body: expect.stringContaining("openspec-new-change skill") }),
+      const patchCalls = opts.octokit.request.mock.calls.filter(
+        (c: any) => c[0].startsWith("PATCH /repos/"),
       );
+      expect(patchCalls[patchCalls.length - 1][1].body).toContain("openspec-new-change skill");
     });
 
-    it("posts failure on both issue and impl PR when error occurs after PR opens", async () => {
+    it("posts failure on the status comment AND the impl PR when error occurs after PR opens", async () => {
       // Simulate: PR opens fine, but addLabels throws.
       const opts = chainedOpts();
       opts.octokit.issues.addLabels.mockRejectedValueOnce(new Error("forbidden"));
 
       await expect(handleCreateImpl(opts)).rejects.toThrow("forbidden");
 
-      const commentBodies = opts.octokit.issues.createComment.mock.calls.map(
-        (c: any) => c[0],
+      // Status comment got the failure body.
+      const patchCalls = opts.octokit.request.mock.calls.filter(
+        (c: any) => c[0].startsWith("PATCH /repos/"),
       );
-      const issueTargets = commentBodies.filter((b: any) => b.issue_number === 10);
-      const implPrTargets = commentBodies.filter((b: any) => b.issue_number === 99);
-      expect(issueTargets.length).toBeGreaterThan(0);
+      expect(patchCalls[patchCalls.length - 1][1].body).toContain("forbidden");
+      // Impl PR also got a comment (newly-opened PR's own reviewer
+      // wouldn't see the status comment on the originating issue).
+      const implPrTargets = opts.octokit.issues.createComment.mock.calls
+        .map((c: any) => c[0])
+        .filter((b: any) => b.issue_number === 99);
       expect(implPrTargets.length).toBeGreaterThan(0);
     });
   });

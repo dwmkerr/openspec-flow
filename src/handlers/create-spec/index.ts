@@ -18,6 +18,7 @@ import {
 } from "./git.js";
 import { listNewChanges, summariseProposal } from "./changes.js";
 import { buildSpecPrBody } from "./pr.js";
+import { updateStatusComment } from "../shared/status-comment.js";
 
 const PROMPT_TEMPLATE = readFileSync(join(__dirname, "prompt.md"), "utf8");
 
@@ -59,6 +60,12 @@ export interface HandleCreateSpecOpts {
   gitPushToken: string;
   log: RunAgentLogger;
   botIdentity?: { name: string; email: string };
+  // Sticky status comment id (created by the dispatcher). When set,
+  // the handler PATCHes this comment at lifecycle milestones rather
+  // than posting separate progress/final comments. Unset in CLI
+  // mode — all status writes silently no-op.
+  statusCommentId?: number;
+  statusTargetNumber?: number;
   // Hook for tests to substitute the agent runner.
   runner?: typeof runAgent;
 }
@@ -71,21 +78,6 @@ const DEFAULT_BOT_IDENTITY = {
 const interpolate = (template: string, vars: Record<string, string>): string =>
   template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`);
 
-const postIssueComment = async (
-  octokit: MinimalOctokit,
-  owner: string,
-  repo: string,
-  issueNumber: number,
-  body: string,
-): Promise<void> => {
-  try {
-    await octokit.issues.createComment({ owner, repo, issue_number: issueNumber, body });
-  } catch (err) {
-    // Swallow comment failures — the PR (if it got that far) is the
-    // substantive artefact; a missing comment doesn't block the flow.
-  }
-};
-
 export const handleCreateSpec = async (
   opts: HandleCreateSpecOpts,
 ): Promise<{ prNumber: number; prUrl: string } | null> => {
@@ -93,6 +85,17 @@ export const handleCreateSpec = async (
   const run = opts.runner ?? runAgent;
 
   let workdir = "";
+  const statusLog = { warn: opts.log.warn };
+  const setStatus = (body: string) =>
+    updateStatusComment(
+      opts.octokit as any,
+      opts.owner,
+      opts.repo,
+      opts.statusCommentId,
+      body,
+      statusLog,
+    );
+
   try {
     opts.log.info(`create-spec: starting for issue #${opts.issueNumber}`);
 
@@ -117,6 +120,8 @@ export const handleCreateSpec = async (
       issueTitle: opts.issueTitle,
       repo: `${opts.owner}/${opts.repo}`,
     });
+
+    await setStatus(`📖 reading context for issue #${opts.issueNumber}…`);
 
     const headBefore = headSha(workdir);
 
@@ -144,6 +149,8 @@ export const handleCreateSpec = async (
     const changeName = changes[0];
     opts.log.info(`create-spec: agent produced change "${changeName}"${changes.length > 1 ? ` (+${changes.length - 1} more)` : ""}`);
 
+    await setStatus(`🔧 agent finished, pushing branch…`);
+
     pushBranch(workdir, branch);
     opts.log.info(`create-spec: pushed ${branch}`);
 
@@ -169,13 +176,7 @@ export const handleCreateSpec = async (
       labels: ["openspec:spec"],
     });
 
-    await postIssueComment(
-      opts.octokit,
-      opts.owner,
-      opts.repo,
-      opts.issueNumber,
-      `spec PR opened: #${pr.data.number}`,
-    );
+    await setStatus(`✅ spec PR opened: #${pr.data.number}`);
 
     opts.log.info(`create-spec: done — ${pr.data.html_url}`);
 
@@ -209,12 +210,8 @@ export const handleCreateSpec = async (
     return { prNumber: pr.data.number, prUrl: pr.data.html_url };
   } catch (err) {
     const msg = (err as Error).message;
-    await postIssueComment(
-      opts.octokit,
-      opts.owner,
-      opts.repo,
-      opts.issueNumber,
-      `❌ openspec-flow couldn't open a spec PR: ${msg}. See dev logs for trace.`,
+    await setStatus(
+      `❌ openspec-flow failed: ${msg}. See dev logs for trace.`,
     );
     throw err;
   } finally {

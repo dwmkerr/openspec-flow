@@ -26,6 +26,7 @@ import {
 } from "../create-spec/git.js";
 import { summariseProposal } from "../create-spec/changes.js";
 import { parseSpecPrMetadata } from "../shared/spec-pr-metadata.js";
+import { updateStatusComment } from "../shared/status-comment.js";
 import { verifyImplWorkdir } from "./verify.js";
 import type { MinimalOctokit as SpecMinimalOctokit } from "../create-spec/index.js";
 
@@ -58,6 +59,8 @@ export interface HandleCreateImplOpts {
   issueTitle?: string;
   specBranch?: string;
   botIdentity?: { name: string; email: string };
+  statusCommentId?: number;
+  statusTargetNumber?: number;
   runner?: typeof runAgent;
 }
 
@@ -104,6 +107,17 @@ export const handleCreateImpl = async (
   let workdir = "";
   let implPrNumber: number | null = null;
   let resolvedIssue = opts.issueNumber;
+
+  const statusLog = { warn: opts.log.warn };
+  const setStatus = (body: string) =>
+    updateStatusComment(
+      opts.octokit as any,
+      opts.owner,
+      opts.repo,
+      opts.statusCommentId,
+      body,
+      statusLog,
+    );
 
   try {
     opts.log.info(`create-impl: starting (${opts.mode}) for spec PR #${opts.specPrNumber}`);
@@ -160,6 +174,8 @@ export const handleCreateImpl = async (
       repo: `${opts.owner}/${opts.repo}`,
     });
 
+    await setStatus(`📖 implementing change \`${changeName}\` for issue #${resolvedIssue}…`);
+
     const headBefore = headSha(workdir);
 
     await run({
@@ -184,6 +200,8 @@ export const handleCreateImpl = async (
       throw new Error(verify.reason!);
     }
     opts.log.info(`create-impl: workdir verified — change archived, committed`);
+
+    await setStatus(`🔧 agent finished, pushing branch…`);
 
     pushBranch(workdir, branch);
     opts.log.info(`create-impl: pushed ${branch}`);
@@ -220,24 +238,19 @@ export const handleCreateImpl = async (
       labels: ["openspec:impl"],
     });
 
-    await safeComment(
-      opts.octokit,
-      opts.owner,
-      opts.repo,
-      resolvedIssue,
-      `impl PR opened: #${pr.data.number}`,
-    );
+    await setStatus(`✅ impl PR opened: #${pr.data.number}`);
 
     opts.log.info(`create-impl: done — ${pr.data.html_url}`);
     return { prNumber: pr.data.number, prUrl: pr.data.html_url };
   } catch (err) {
     const msg = (err as Error).message;
-    const failure = `❌ openspec-flow couldn't open an impl PR: ${msg}. See dev logs for trace.`;
-    if (resolvedIssue) {
-      await safeComment(opts.octokit, opts.owner, opts.repo, resolvedIssue, failure);
-    }
+    const failure = `❌ openspec-flow failed: ${msg}. See dev logs for trace.`;
+    await setStatus(failure);
+    // If the failure occurred AFTER the impl PR was already opened,
+    // also drop a comment on the impl PR itself — the status comment
+    // lives on the originating issue / spec PR, and the impl PR
+    // reviewer otherwise wouldn't see the failure context.
     if (implPrNumber !== null) {
-      // PR already opened before the later failure — surface there too.
       await safeComment(opts.octokit, opts.owner, opts.repo, implPrNumber, failure);
     }
     throw err;
