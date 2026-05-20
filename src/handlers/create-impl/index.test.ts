@@ -41,6 +41,9 @@ const buildOctokit = (specBody = "") => ({
     createComment: jest.fn().mockResolvedValue({}),
     addLabels: jest.fn().mockResolvedValue({}),
   },
+  // Raw request() is what the handler uses for addLabels (see
+  // create-spec MinimalOctokit comment for the reason).
+  request: jest.fn().mockResolvedValue({ data: {} }),
   pulls: {
     get: jest.fn().mockResolvedValue({
       data: {
@@ -115,7 +118,8 @@ describe("handleCreateImpl", () => {
       expect(prArgs.body).toContain("kind: impl");
       expect(prArgs.body).toContain("spec-pr: 12");
       expect(prArgs.body).toContain("change: add-csv-export");
-      expect(opts.octokit.issues.addLabels).toHaveBeenCalledWith(
+      expect(opts.octokit.request).toHaveBeenCalledWith(
+        "POST /repos/{owner}/{repo}/issues/{issue_number}/labels",
         expect.objectContaining({ labels: ["openspec:impl"] }),
       );
       expect(opts.octokit.issues.createComment).toHaveBeenCalledWith(
@@ -185,9 +189,9 @@ describe("handleCreateImpl", () => {
     });
 
     it("posts failure on both issue and impl PR when error occurs after PR opens", async () => {
-      // Simulate: PR opens fine, but addLabels throws.
+      // Simulate: PR opens fine, but the addLabels REST call throws.
       const opts = chainedOpts();
-      opts.octokit.issues.addLabels.mockRejectedValueOnce(new Error("forbidden"));
+      opts.octokit.request.mockRejectedValueOnce(new Error("forbidden"));
 
       await expect(handleCreateImpl(opts)).rejects.toThrow("forbidden");
 

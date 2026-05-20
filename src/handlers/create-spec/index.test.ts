@@ -40,6 +40,9 @@ const buildOctokit = () => ({
     createComment: jest.fn().mockResolvedValue({}),
     addLabels: jest.fn().mockResolvedValue({}),
   },
+  // Raw request() is what handler actually uses for addLabels —
+  // see MinimalOctokit comment in src/handlers/create-spec/index.ts.
+  request: jest.fn().mockResolvedValue({ data: {} }),
   pulls: {
     create: jest.fn().mockResolvedValue({
       data: { number: 99, html_url: "https://github.com/o/r/pull/99" },
@@ -102,7 +105,8 @@ describe("handleCreateSpec", () => {
     expect(prArgs.body).toContain("issue: 10");
     expect(prArgs.body).toContain("change: add-csv-export");
     expect(prArgs.body).toContain("Closes #10");
-    expect(opts.octokit.issues.addLabels).toHaveBeenCalledWith(
+    expect(opts.octokit.request).toHaveBeenCalledWith(
+      "POST /repos/{owner}/{repo}/issues/{issue_number}/labels",
       expect.objectContaining({ labels: ["openspec:spec"] }),
     );
     expect(opts.octokit.issues.createComment).toHaveBeenCalledWith(

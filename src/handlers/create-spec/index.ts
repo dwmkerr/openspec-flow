@@ -39,6 +39,15 @@ export interface MinimalOctokit {
       labels: string[];
     }) => Promise<unknown>;
   };
+  // Raw REST endpoint call. We use this for addLabels instead of
+  // `issues.addLabels` because Probot ships an older
+  // @octokit/plugin-rest-endpoint-methods (v13) whose addLabels
+  // serializer is mis-aligned with the current GitHub REST API —
+  // GitHub interprets one of the array entries as a PR node id,
+  // returning 422 "Could not resolve to a node with the global id of
+  // 'PR_...'". The raw request() form forces the documented body
+  // shape `{labels: [...]}` and bypasses the plugin entirely.
+  request: (route: string, params: Record<string, unknown>) => Promise<unknown>;
   pulls: {
     create: (params: {
       owner: string;
@@ -157,12 +166,17 @@ export const handleCreateSpec = async (
       body,
     });
 
-    await opts.octokit.issues.addLabels({
-      owner: opts.owner,
-      repo: opts.repo,
-      issue_number: pr.data.number,
-      labels: ["openspec:spec"],
-    });
+    // Use raw request() instead of issues.addLabels — see MinimalOctokit
+    // interface comment above.
+    await opts.octokit.request(
+      "POST /repos/{owner}/{repo}/issues/{issue_number}/labels",
+      {
+        owner: opts.owner,
+        repo: opts.repo,
+        issue_number: pr.data.number,
+        labels: ["openspec:spec"],
+      },
+    );
 
     await postIssueComment(
       opts.octokit,

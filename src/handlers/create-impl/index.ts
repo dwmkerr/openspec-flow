@@ -205,12 +205,22 @@ export const handleCreateImpl = async (
     });
     implPrNumber = pr.data.number;
 
-    await opts.octokit.issues.addLabels({
-      owner: opts.owner,
-      repo: opts.repo,
-      issue_number: pr.data.number,
-      labels: ["openspec:impl"],
-    });
+    // Use raw request() instead of issues.addLabels — see
+    // MinimalOctokit interface in ../create-spec/index.ts for the
+    // full reason. Probot bundles an older
+    // @octokit/plugin-rest-endpoint-methods (v13) whose addLabels
+    // serializer trips on the current GitHub REST API and returns
+    // 422 "Could not resolve to a node with the global id of
+    // 'PR_...'". The raw form forces the documented body shape.
+    await opts.octokit.request(
+      "POST /repos/{owner}/{repo}/issues/{issue_number}/labels",
+      {
+        owner: opts.owner,
+        repo: opts.repo,
+        issue_number: pr.data.number,
+        labels: ["openspec:impl"],
+      },
+    );
 
     await safeComment(
       opts.octokit,
