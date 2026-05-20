@@ -9,15 +9,17 @@ jest.mock("../create-spec/preconditions", () => ({
   assertOpenSpecCli: jest.fn(),
   assertSkillPresent: jest.fn(),
 }));
-jest.mock("../create-spec/git", () => ({
-  cloneRepo: jest.fn(),
-  configIdentity: jest.fn(),
-  fetchAndCheckoutBranch: jest.fn(),
-  checkoutNewBranch: jest.fn(),
-  addAll: jest.fn(),
-  commit: jest.fn(),
-  pushBranch: jest.fn(),
-}));
+jest.mock("../create-spec/git", () => {
+  let counter = 0;
+  return {
+    cloneRepo: jest.fn(),
+    configIdentity: jest.fn(),
+    fetchAndCheckoutBranch: jest.fn(),
+    checkoutNewBranch: jest.fn(),
+    pushBranch: jest.fn(),
+    headSha: jest.fn(() => `sha-${++counter}`),
+  };
+});
 jest.mock("../create-spec/changes", () => ({
   summariseProposal: jest.fn(() => "Implements the feature for issue."),
 }));
@@ -30,7 +32,7 @@ import {
   cloneRepo,
   fetchAndCheckoutBranch,
   checkoutNewBranch,
-  commit,
+  headSha,
   pushBranch,
 } from "../create-spec/git.js";
 import { assertSkillPresent } from "../create-spec/preconditions.js";
@@ -153,6 +155,17 @@ describe("handleCreateImpl", () => {
   });
 
   describe("verification + failure", () => {
+    it("aborts when agent didn't commit (HEAD unchanged)", async () => {
+      (headSha as jest.Mock).mockReturnValueOnce("same-sha").mockReturnValueOnce("same-sha");
+      const opts = chainedOpts();
+
+      await expect(handleCreateImpl(opts)).rejects.toThrow(
+        "agent didn't commit any changes",
+      );
+      expect(pushBranch).not.toHaveBeenCalled();
+      expect(opts.octokit.pulls.create).not.toHaveBeenCalled();
+    });
+
     it("aborts when verifyImplWorkdir fails (e.g. agent forgot archive)", async () => {
       (verifyImplWorkdir as jest.Mock).mockReturnValueOnce({
         ok: false,
@@ -161,7 +174,6 @@ describe("handleCreateImpl", () => {
       const opts = chainedOpts();
 
       await expect(handleCreateImpl(opts)).rejects.toThrow("change directory still exists");
-      expect(commit).not.toHaveBeenCalled();
       expect(pushBranch).not.toHaveBeenCalled();
       expect(opts.octokit.pulls.create).not.toHaveBeenCalled();
       expect(opts.octokit.issues.createComment).toHaveBeenCalledWith(

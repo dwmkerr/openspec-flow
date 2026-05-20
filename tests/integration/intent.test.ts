@@ -12,7 +12,11 @@ import { Probot, ProbotOctokit } from "probot";
 jest.mock("../../src/handlers/create-spec/index", () => ({
   handleCreateSpec: jest.fn().mockResolvedValue("stub reply"),
 }));
+jest.mock("../../src/handlers/iterate-spec/index", () => ({
+  handleIterateSpec: jest.fn().mockResolvedValue(undefined),
+}));
 import { handleCreateSpec } from "../../src/handlers/create-spec/index";
+import { handleIterateSpec } from "../../src/handlers/iterate-spec/index";
 import app from "../../src/index";
 import {
   issueLabeled,

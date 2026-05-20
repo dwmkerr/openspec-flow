@@ -21,8 +21,7 @@ import {
   configIdentity,
   fetchAndCheckoutBranch,
   checkoutNewBranch,
-  addAll,
-  commit,
+  headSha,
   pushBranch,
 } from "../create-spec/git.js";
 import { summariseProposal } from "../create-spec/changes.js";
@@ -149,6 +148,10 @@ export const handleCreateImpl = async (
       fetchAndCheckoutBranch(workdir, specBranch);
     }
 
+    // Pre-create the impl branch so the agent commits directly onto it.
+    const branch = branchName(resolvedIssue, issueTitle).replace(/^chore\//, "feat/");
+    checkoutNewBranch(workdir, branch);
+
     assertOpenSpecCli();
     assertSkillPresent(workdir);
 
@@ -156,6 +159,8 @@ export const handleCreateImpl = async (
       changeName,
       repo: `${opts.owner}/${opts.repo}`,
     });
+
+    const headBefore = headSha(workdir);
 
     await run({
       prompt,
@@ -167,16 +172,19 @@ export const handleCreateImpl = async (
       } as any,
     });
 
+    const headAfter = headSha(workdir);
+    if (headBefore === headAfter) {
+      throw new Error(
+        "agent didn't commit any changes — HEAD is unchanged after the run",
+      );
+    }
+
     const verify = verifyImplWorkdir(workdir, changeName);
     if (!verify.ok) {
       throw new Error(verify.reason!);
     }
-    opts.log.info(`create-impl: workdir verified — change archived, code dirty`);
+    opts.log.info(`create-impl: workdir verified — change archived, committed`);
 
-    const branch = branchName(resolvedIssue, issueTitle).replace(/^chore\//, "feat/");
-    checkoutNewBranch(workdir, branch);
-    addAll(workdir);
-    commit(workdir, `feat: ${issueTitle}`);
     pushBranch(workdir, branch);
     opts.log.info(`create-impl: pushed ${branch}`);
 

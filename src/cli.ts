@@ -61,6 +61,7 @@ const stdoutLogger = {
 const usage = (): string => `usage:
   openspec-flow handle create-spec --issue <n> --repo <owner/repo>
   openspec-flow handle create-impl --pr <spec-pr> --repo <owner/repo>
+  openspec-flow handle iterate-spec --pr <spec-pr> --repo <owner/repo>
 `;
 
 const requireFlag = (flags: Record<string, string>, name: string): string => {
@@ -111,6 +112,27 @@ export const runCli = async (argv: string[]): Promise<number> => {
     if (result) {
       process.stdout.write(`\nspec PR opened: ${result.prUrl}\n`);
     }
+    return 0;
+  }
+
+  if (args.intent === "iterate-spec") {
+    const specPr = Number(requireFlag(args.flags, "pr"));
+    const repo = requireFlag(args.flags, "repo");
+    const [owner, name] = repo.split("/");
+    if (!owner || !name) throw new Error(`--repo must be owner/name (got "${repo}")`);
+    const { Octokit } = await import("@octokit/rest");
+    const { handleIterateSpec } = await import("./handlers/iterate-spec/index.js");
+    const token = execSync("gh auth token", { encoding: "utf8" }).trim();
+    if (!token) throw new Error("gh auth token returned empty; run `gh auth login`");
+    const octokit = new Octokit({ auth: token });
+    await handleIterateSpec({
+      owner,
+      repo: name,
+      specPrNumber: specPr,
+      octokit: octokit as any,
+      gitPushToken: token,
+      log: stdoutLogger,
+    });
     return 0;
   }
 

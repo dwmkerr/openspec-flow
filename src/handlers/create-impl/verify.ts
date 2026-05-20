@@ -1,10 +1,11 @@
 // Post-agent verification for create-impl. The agent is expected
-// to have implemented + verified + archived. We confirm by reading
-// the workdir filesystem, not by parsing the agent's reply.
+// to have implemented + verified + archived + committed. The
+// handler's HEAD-moved check covers "did the agent commit at
+// all"; this module covers "did the archive land". We never parse
+// the agent's reply.
 
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { statusPorcelain } from "../create-spec/git.js";
 
 export interface VerifyResult {
   ok: boolean;
@@ -39,14 +40,6 @@ export const verifyImplWorkdir = (
     return {
       ok: false,
       reason: `no archived directory matching *-${changeName} under openspec/changes/archive/`,
-    };
-  }
-
-  const dirty = statusPorcelain(workdir);
-  if (!dirty) {
-    return {
-      ok: false,
-      reason: "git status is clean — agent archived but produced no code changes",
     };
   }
 
