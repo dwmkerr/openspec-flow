@@ -47,9 +47,12 @@ export const checkoutNewBranch = (workdir: string, branch: string): void => {
 
 // Used by chained-mode impl: fetch the spec branch from origin and
 // check it out so the workdir reflects spec changes before we ask
-// the agent to implement on top.
+// the agent to implement on top. The explicit `<branch>:<branch>`
+// refspec creates a local branch directly — needed because our
+// shallow / single-branch clone doesn't auto-create local refs for
+// non-default branches via plain `git fetch origin <branch>`.
 export const fetchAndCheckoutBranch = (workdir: string, branch: string): void => {
-  run(["fetch", "origin", branch], workdir);
+  run(["fetch", "origin", `+refs/heads/${branch}:refs/heads/${branch}`], workdir);
   run(["checkout", branch], workdir);
 };
 
