@@ -5,16 +5,15 @@
 The package `@dwmkerr/openspec-flow` SHALL expose a binary named `openspec-flow`. The binary SHALL accept the subcommand `init` with the following flags:
 
 - `--yes` — skip all interactive prompts; accept defaults
-- `--force` — overwrite hand-edited managed files
-- `--no-secrets-check` — skip the `gh secret list` probe
+- `--force` — overwrite the managed README block when markers are present
 - `--path <dir>` — target directory (default: current working directory)
 - `--version` — print package version and exit
 - `--help` — print usage and exit
 
 #### Scenario: Default invocation in a clean repo
 
-- **WHEN** `npx @dwmkerr/openspec-flow init --yes` runs in a directory containing a git repo with no openspec-flow artefacts
-- **THEN** the process writes `.github/workflows/openspec-flow.yml`, `.openspec-flow.yaml`, and a managed block in `README.md`
+- **WHEN** `npx @dwmkerr/openspec-flow init --yes` runs in a directory containing `openspec/` and no openspec-flow artefacts
+- **THEN** the process writes `.github/workflows/openspec-flow.yml` and a managed block in `README.md`
 - **AND** exits 0
 
 #### Scenario: Help
@@ -23,89 +22,71 @@ The package `@dwmkerr/openspec-flow` SHALL expose a binary named `openspec-flow`
 - **THEN** the process prints a help summary including all listed flags
 - **AND** exits 0
 
-### Requirement: Shim workflow file write
+### Requirement: Workflow file write
 
-`init` SHALL write `.github/workflows/openspec-flow.yml` containing the reusable-workflow stub defined in the `rfc-shim-architecture` change (Decision 5). The `uses:` line SHALL reference the published reusable workflow at a versioned tag matching the installed CLI's major.minor version.
+`init` SHALL write `.github/workflows/openspec-flow.yml` containing the reusable-workflow stub defined in the `rfc-shim-architecture` change (Decision 5). The `uses:` line SHALL reference the published reusable workflow at a ref tied to the installed CLI's version.
 
-#### Scenario: First run writes the shim
+#### Scenario: First run writes the workflow
 
 - **WHEN** `init --yes` runs and `.github/workflows/openspec-flow.yml` does not exist
-- **THEN** the file is created with the rendered shim template
-- **AND** the `uses:` line ends with `@v<major>.<minor>.<patch>` matching the CLI version
+- **THEN** the file is created with the rendered workflow template
 
-#### Scenario: Re-run on a matching shim is a no-op
+#### Scenario: Re-run on a matching workflow is a no-op
 
-- **WHEN** `init --yes` runs and the existing shim file's content hash matches the current template
+- **WHEN** `init --yes` runs and the existing workflow file is byte-identical to the current template
 - **THEN** the file is not modified
 - **AND** stdout includes `already initialised`
 - **AND** exit code is 0
 
-#### Scenario: Re-run on a hand-edited shim warns and does not overwrite
+#### Scenario: Re-run on a hand-edited workflow warns and does not overwrite
 
-- **WHEN** `init --yes` runs and the existing shim file's content hash matches no known template version
+- **WHEN** `init --yes` runs and the existing workflow file differs from the current template
 - **THEN** the file is not modified
 - **AND** stdout includes a warning naming the file
 - **AND** exit code is 0
 
-#### Scenario: Force overwrites a hand-edited shim
+#### Scenario: Force overwrites a hand-edited workflow
 
-- **WHEN** `init --yes --force` runs and the existing shim file's content hash matches no known template version
+- **WHEN** `init --yes --force` runs and the existing workflow file differs from the current template
 - **THEN** the file is overwritten with the current template
-- **AND** exit code is 0
-
-### Requirement: Config stub write
-
-`init` SHALL write `.openspec-flow.yaml` at the project root containing a commented stub. The stub SHALL parse as valid YAML and SHALL be a no-op for the runtime (every field commented out).
-
-#### Scenario: First run writes the config stub
-
-- **WHEN** `init --yes` runs and `.openspec-flow.yaml` does not exist
-- **THEN** the file is created
-- **AND** parses as valid YAML
-- **AND** contains no uncommented keys
-
-#### Scenario: Re-run does not modify an existing config
-
-- **WHEN** `init --yes` runs and `.openspec-flow.yaml` exists with any content
-- **THEN** the file is not modified
 - **AND** exit code is 0
 
 ### Requirement: README managed-block patch
 
-`init` SHALL patch `README.md` between the marker pair `<!-- openspec-flow:install-start -->` and `<!-- openspec-flow:install-end -->`. Content outside the markers SHALL NOT be modified.
+`init` SHALL inject content between the marker pair `<!-- openspec-flow init-start -->` and `<!-- openspec-flow init-end -->`. The model is three-state and intentionally simple:
 
-#### Scenario: First run appends the block
+- **No markers** — `init` appends the marker pair and managed content to `README.md` (or creates a minimal `README.md` if one does not exist).
+- **Markers present** — `init` leaves the file alone. Once injected, the user owns the section.
+- **`--force`** — `init` overwrites the content between the markers with the current managed content.
 
-- **WHEN** `init --yes` runs and `README.md` does not contain the marker pair
+Content outside the markers SHALL NOT be modified.
+
+#### Scenario: README absent — created with managed block
+
+- **WHEN** `init --yes` runs and `README.md` does not exist
+- **THEN** a `README.md` is created containing a `# <repo-name>` heading followed by the marker pair and managed content
+
+#### Scenario: README present without markers — block appended
+
+- **WHEN** `init --yes` runs and `README.md` exists without the marker pair
 - **THEN** the marker pair and managed content are appended to `README.md` separated from existing content by a blank line
 - **AND** content above the appended block is byte-identical to the file's previous content
 
-#### Scenario: README missing creates a minimal file
-
-- **WHEN** `init --yes` runs and `README.md` does not exist
-- **THEN** a `README.md` is created containing a project-level `# <repo-name>` heading followed by the managed block
-
-#### Scenario: Re-run replaces only the managed block
+#### Scenario: Markers present — leave alone by default
 
 - **WHEN** `init --yes` runs and `README.md` contains the marker pair
+- **THEN** `README.md` is not modified
+- **AND** exit code is 0
+
+#### Scenario: Force overwrites the managed block
+
+- **WHEN** `init --yes --force` runs and `README.md` contains the marker pair
 - **THEN** content between the markers is replaced with the current managed content
 - **AND** content outside the markers is byte-identical to the file's previous content
 
-#### Scenario: Deleted markers are not re-injected without force
-
-- **WHEN** `init --yes` runs and `README.md` exists without the marker pair and `init` has previously written the block
-- **THEN** `README.md` is not modified
-- **AND** stdout includes a warning that the user has taken over the README section
-- **AND** exit code is 0
-
-#### Scenario: Force re-appends after marker deletion
-
-- **WHEN** `init --yes --force` runs and `README.md` exists without the marker pair
-- **THEN** the marker pair and managed content are appended to `README.md`
-
 ### Requirement: Secret-state reporting
 
-`init` SHALL report the presence of `ANTHROPIC_API_KEY`, `OPENSPEC_FLOW_APP_ID`, and `OPENSPEC_FLOW_PRIVATE_KEY` as GitHub Actions secrets when `gh` is on `PATH` and the working directory resolves to a GitHub remote. `init` SHALL NEVER write a secret value, prompt for one, or transmit one.
+`init` SHALL report the presence of the `ANTHROPIC_API_KEY` GitHub Actions secret when `gh` is on `PATH` and the working directory resolves to a GitHub remote. `init` SHALL NEVER write a secret value, prompt for one, or transmit one. The probe SHALL always run when the prerequisites are met — there is no opt-out flag.
 
 #### Scenario: Reports presence when gh is available
 
@@ -122,12 +103,6 @@ The package `@dwmkerr/openspec-flow` SHALL expose a binary named `openspec-flow`
 - **WHEN** `init --yes` runs and `gh` is not on PATH
 - **THEN** stdout contains a line indicating the secret check was skipped
 - **AND** exit code is 0
-
-#### Scenario: Skips check on explicit flag
-
-- **WHEN** `init --yes --no-secrets-check` runs
-- **THEN** no `gh` subprocess is spawned
-- **AND** stdout does not include secret presence or absence lines
 
 ### Requirement: Idempotent and ordered file writes
 
@@ -154,21 +129,21 @@ The package `@dwmkerr/openspec-flow` SHALL expose a binary named `openspec-flow`
 - **WHEN** `init --yes` runs in a TTY
 - **THEN** no interactive prompts are shown
 
-### Requirement: OpenSpec scaffold advisory
+### Requirement: OpenSpec scaffold hard gate
 
-`init` SHALL detect whether the target directory contains an `openspec/` directory at its root. When `openspec/` is absent, `init` SHALL print a single advisory line referencing `npx @fission-ai/openspec init` and continue. `init` SHALL NOT install or invoke OpenSpec in this slice.
+`init` SHALL require an `openspec/` directory at the target root. When `openspec/` is absent, `init` SHALL print instructions referencing `npx @fission-ai/openspec init` and exit non-zero without writing any file. `init` SHALL NOT install or invoke OpenSpec — that scaffold is the user's responsibility and OpenSpec's CLI owns AI-tool selection + skill installation.
 
-#### Scenario: Missing openspec/ prints advisory
+#### Scenario: Missing openspec/ exits without writing
 
 - **WHEN** `init --yes` runs in a repo with no `openspec/` directory
 - **THEN** stdout contains a line referencing `npx @fission-ai/openspec init`
-- **AND** the shim, config, and README block are still written
-- **AND** exit code is 0
+- **AND** no workflow, README, or other artefact is written
+- **AND** exit code is 1
 
-#### Scenario: Present openspec/ does not print advisory
+#### Scenario: Present openspec/ proceeds normally
 
 - **WHEN** `init --yes` runs in a repo with an existing `openspec/` directory
-- **THEN** stdout does not contain the OpenSpec advisory line
+- **THEN** the workflow and README block are written
 
 ### Requirement: User-facing next-steps instructions
 
@@ -184,14 +159,19 @@ The package `@dwmkerr/openspec-flow` SHALL expose a binary named `openspec-flow`
 
 `init` SHALL use the following exit codes:
 
-- `0` — success (including no-op re-runs and advisory paths)
-- `1` — unexpected error
+- `0` — success (including no-op re-runs)
+- `1` — missing `openspec/` scaffold (or other unexpected error)
 - `2` — non-TTY invocation without `--yes`
 
 #### Scenario: Success exits 0
 
 - **WHEN** `init --yes` completes any successful path including no-op
 - **THEN** exit code is 0
+
+#### Scenario: Missing openspec exits 1
+
+- **WHEN** `init --yes` runs in a repo without `openspec/`
+- **THEN** exit code is 1
 
 #### Scenario: Non-TTY without --yes exits 2
 

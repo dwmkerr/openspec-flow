@@ -5,8 +5,8 @@
 // HTML-comment markers bound the managed README block. Same comment
 // shape as the PR-body metadata block — invisible in rendered Markdown,
 // machine-readable, survives copy-paste.
-export const README_MARKER_START = "<!-- openspec-flow:install-start -->";
-export const README_MARKER_END = "<!-- openspec-flow:install-end -->";
+export const README_MARKER_START = "<!-- openspec-flow init-start -->";
+export const README_MARKER_END = "<!-- openspec-flow init-end -->";
 
 // Pinned to `main` while the package version is 0.0.0. Switch to
 // `@v<x>.<y>.<z>` once we cut a real release.
@@ -44,7 +44,6 @@ This repo uses [openspec-flow](https://github.com/dwmkerr/openspec-flow) to driv
 4. openspec-flow opens an **impl PR** (\`openspec:impl\`). Review, iterate, merge. The originating issue closes automatically.
 
 Required Actions secret: \`ANTHROPIC_API_KEY\`.
-Optional: \`OPENSPEC_FLOW_APP_ID\` + \`OPENSPEC_FLOW_PRIVATE_KEY\` (sets bot identity to \`openspec-flow[bot]\`).
 ${README_MARKER_END}`;
 
 export const renderMinimalReadme = (repoName: string): string => `# ${repoName}

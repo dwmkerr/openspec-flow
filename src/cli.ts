@@ -62,6 +62,8 @@ const stdoutLogger = {
 
 const usage = (): string => `usage:
   openspec-flow init [--yes] [--force] [--path <dir>]
+    Scaffolds .github/workflows/openspec-flow.yml and a README block.
+    Requires openspec/ already present (run \`openspec init\` first).
   openspec-flow handle create-spec --issue <n> --repo <owner/repo>
   openspec-flow handle create-impl --pr <spec-pr> --repo <owner/repo>
   openspec-flow handle iterate-spec --pr <spec-pr> --repo <owner/repo>

@@ -66,6 +66,10 @@ const planReadme = (state: FsState, opts: PlanOptions): Action => {
   const repoName = path.basename(state.cwd);
   const block = renderReadmeBlock();
 
+  // Three-state model: README absent → create. Marker present →
+  // leave alone (user owns it once injected; we don't second-guess).
+  // --force → overwrite content between markers, or re-append if
+  // the user has deleted them.
   if (state.readme === null) {
     return {
       kind: "write",
@@ -75,37 +79,28 @@ const planReadme = (state: FsState, opts: PlanOptions): Action => {
     };
   }
 
-  const hasStart = state.readme.includes(README_MARKER_START);
-  const hasEnd = state.readme.includes(README_MARKER_END);
+  const hasMarkers =
+    state.readme.includes(README_MARKER_START) && state.readme.includes(README_MARKER_END);
 
-  if (hasStart && hasEnd) {
-    const updated = replaceBetween(state.readme, README_MARKER_START, README_MARKER_END, block);
-    if (updated === state.readme) {
-      return { kind: "noop", path: abs, content: state.readme, reason: "managed block already current" };
-    }
-    return {
-      kind: "patch-readme",
-      path: abs,
-      content: updated,
-      reason: "refreshing managed block",
-    };
-  }
-
-  // Markers absent. First run on an existing README, or user has
-  // taken over the section by deleting markers. Without --force we
-  // only append if neither marker exists *and* the user hasn't seen
-  // the block before — heuristic: if any part of the block's title
-  // exists in the README, assume "user took over".
-  const looksLikeUserTookOver = state.readme.includes("openspec-flow") && !opts.force;
-  if (looksLikeUserTookOver) {
+  if (hasMarkers && !opts.force) {
     return {
       kind: "noop",
       path: abs,
       content: state.readme,
-      reason: "README mentions openspec-flow but markers are gone — leaving alone; re-run with --force to re-append",
+      reason: "managed block present — leaving alone (--force to overwrite)",
     };
   }
 
+  if (hasMarkers && opts.force) {
+    return {
+      kind: "patch-readme",
+      path: abs,
+      content: replaceBetween(state.readme, README_MARKER_START, README_MARKER_END, block),
+      reason: "force: overwriting managed block",
+    };
+  }
+
+  // No markers. First run on an existing README → append.
   const separator = state.readme.endsWith("\n") ? "\n" : "\n\n";
   return {
     kind: "patch-readme",
