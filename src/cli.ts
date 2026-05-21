@@ -6,7 +6,9 @@
 //   openspec-flow handle create-spec --issue <n> --repo <owner/repo>
 
 import { execSync } from "node:child_process";
-import { handleCreateSpec } from "./handlers/create-spec/index.js";
+// Handler imports are lazy: each reads a sibling prompt.md at
+// module-load time, which fails outside the source tree when the
+// CLI is invoked for a non-handle subcommand (eg `init`).
 
 interface ParsedArgs {
   command?: string;
@@ -59,6 +61,7 @@ const stdoutLogger = {
 };
 
 const usage = (): string => `usage:
+  openspec-flow init [--yes] [--force] [--path <dir>]
   openspec-flow handle create-spec --issue <n> --repo <owner/repo>
   openspec-flow handle create-impl --pr <spec-pr> --repo <owner/repo>
   openspec-flow handle iterate-spec --pr <spec-pr> --repo <owner/repo>
@@ -85,6 +88,18 @@ const fetchIssueTitle = (repo: string, issue: number): string => {
 export const runCli = async (argv: string[]): Promise<number> => {
   const args = parseArgs(argv);
 
+  if (args.command === "init") {
+    const { runInit } = await import("./init/index.js");
+    const cwd = args.flags.path
+      ? require("node:path").resolve(args.flags.path)
+      : process.cwd();
+    return runInit({
+      cwd,
+      force: args.flags.force === "true",
+      yes: args.flags.yes === "true",
+    });
+  }
+
   if (args.command !== "handle" || !args.intent) {
     process.stdout.write(usage());
     return args.command ? 1 : 0;
@@ -97,6 +112,7 @@ export const runCli = async (argv: string[]): Promise<number> => {
     if (!owner || !name) throw new Error(`--repo must be owner/name (got "${repo}")`);
     const title = fetchIssueTitle(repo, issue);
     const { Octokit } = await import("@octokit/rest");
+    const { handleCreateSpec } = await import("./handlers/create-spec/index.js");
     const token = execSync("gh auth token", { encoding: "utf8" }).trim();
     if (!token) throw new Error("gh auth token returned empty; run `gh auth login`");
     const octokit = new Octokit({ auth: token });
