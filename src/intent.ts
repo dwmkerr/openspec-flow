@@ -146,7 +146,7 @@ export const classify = (eventName: string, payload: unknown): Intent => {
       };
     }
     if (hasSpec(labels)) {
-      const issueNumber = extractClosesIssue(pr.body ?? null);
+      const issueNumber = extractIssueRef(pr.body ?? null);
       return { kind: "create-impl", specPrNumber: pr.number, issueNumber };
     }
     if (hasImpl(labels)) {
@@ -183,10 +183,14 @@ const classifyPrLabeled = (prNumber: number, labels: Set<string>): Intent => {
   };
 };
 
-const closesRegex = /\b(?:closes|fixes|resolves)\s+#(\d+)\b/i;
+// Match both the auto-close family (closes|fixes|resolves) and the
+// non-closing reference family (refs|references|relates to). Spec PRs
+// now use `Refs #N` so they do not auto-close the originating issue;
+// in-flight spec PRs that already used `Closes #N` still classify.
+const issueRefRegex = /\b(?:closes|fixes|resolves|refs|references|relates\s+to)\s+#(\d+)\b/i;
 
-const extractClosesIssue = (body: string | null): number | null => {
+const extractIssueRef = (body: string | null): number | null => {
   if (!body) return null;
-  const m = body.match(closesRegex);
+  const m = body.match(issueRefRegex);
   return m ? parseInt(m[1], 10) : null;
 };

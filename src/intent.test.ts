@@ -28,7 +28,21 @@ describe("classify — positive intents", () => {
     expect(intent.kind).toBe("iterate-impl");
   });
 
-  it("spec PR merged → create-impl with extracted issue number from Closes", () => {
+  it("spec PR merged → create-impl with extracted issue number from Refs", () => {
+    const intent = classify(
+      "pull_request",
+      prClosed({ prNumber: 43, merged: true, labels: ["openspec:spec"], body: "Refs #42." }),
+    );
+    expect(intent.kind).toBe("create-impl");
+    if (intent.kind === "create-impl") {
+      expect(intent.specPrNumber).toBe(43);
+      expect(intent.issueNumber).toBe(42);
+    }
+  });
+
+  // Legacy: in-flight spec PRs opened before the Refs switch still use
+  // `Closes #N`. The classifier must keep accepting them.
+  it("spec PR merged with legacy Closes body → create-impl with issue number", () => {
     const intent = classify(
       "pull_request",
       prClosed({ prNumber: 43, merged: true, labels: ["openspec:spec"], body: "Closes #42." }),
