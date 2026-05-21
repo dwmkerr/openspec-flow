@@ -14,9 +14,9 @@
 
 ## 3. Carve out follow-up changes
 
-- [ ] 3.1 Scaffold the `shim-cli` change (proposal only) — implementation of `npx @dwmkerr/openspec-flow shim`
+- [ ] 3.1 Scaffold the `shim-init` change (proposal only) — implementation of `npx @dwmkerr/openspec-flow init`, including secret validation and `.openspec-flow.yaml` schema
 - [ ] 3.2 Scaffold the `shim-install-handler` change (proposal only) — Probot/Worker handler for `installation.created` and `installation_repositories.added`
-- [ ] 3.3 Scaffold the `shim-drift-detector` change (proposal only) — daily scheduled drift check + PR opener
+- [ ] 3.3 File a GitHub issue for `shim-drift-detector` — deferred from this RFC per review feedback; captures the daily-check + idempotent-bump-PR design so it is not lost
 - [ ] 3.4 Scaffold the `retire-probot-runtime` change (proposal only) — remove runtime handlers from Probot once the shim path is fully covered
 
 ## 4. Verification

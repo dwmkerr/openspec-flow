@@ -65,41 +65,9 @@ directly to the default branch.
 - **THEN** the system SHALL re-use the existing PR (updating its body if the
   template changed) rather than opening a duplicate
 
-### Requirement: Drift detection opens a bump PR when the shim ref is stale
+### Requirement: `init` CLI writes or updates the shim without requiring the App
 
-The system SHALL check each installed repo's shim file at most once per day. If
-the `@<ref>` in the shim is older than the latest published tag in
-`dwmkerr/openspec-flow`, the system SHALL open a pull request that updates the
-ref to the latest tag and only that token.
-
-The drift PR SHALL:
-
-- Use branch `chore/openspec-flow-bump-<oldref>-to-<newref>`.
-- Use title `chore: bump openspec-flow to <newref>`.
-- Include in the body a link to the release notes for the new version.
-- Be authored by `openspec-flow[bot]`.
-
-If a drift PR is already open for the same installation, the system SHALL update
-the existing PR rather than open a new one.
-
-#### Scenario: Stale shim triggers a bump PR
-- **WHEN** the drift check runs and finds the shim pinned to a ref older than the
-  latest published tag
-- **THEN** the system SHALL open a drift PR updating only the `@<ref>` token
-
-#### Scenario: Up-to-date shim is left alone
-- **WHEN** the drift check runs and finds the shim pinned to the latest tag
-- **THEN** the system SHALL NOT open a PR
-
-#### Scenario: Existing drift PR is updated, not duplicated
-- **WHEN** the drift check runs and an unmerged drift PR already exists for that
-  installation
-- **THEN** the system SHALL update the existing PR's branch and body to reflect
-  the latest target ref rather than opening a second PR
-
-### Requirement: CLI writes or updates the shim without requiring the App
-
-The system SHALL provide a CLI command `npx @dwmkerr/openspec-flow shim` that,
+The system SHALL provide a CLI command `npx @dwmkerr/openspec-flow init` that,
 when run inside a repo, writes or updates `.github/workflows/openspec-flow.yml`
 to match the current shim template. The command SHALL:
 
@@ -112,21 +80,66 @@ to match the current shim template. The command SHALL:
 - Exit with code 0 on no-op (file already matches), code 1 on user abort, code
   2 on filesystem or network error.
 
-#### Scenario: CLI creates the shim on a fresh repo
-- **WHEN** the user runs `npx @dwmkerr/openspec-flow shim --yes` in a repo with
+#### Scenario: `init` creates the shim on a fresh repo
+- **WHEN** the user runs `npx @dwmkerr/openspec-flow init --yes` in a repo with
   no shim file
 - **THEN** the CLI SHALL create `.github/workflows/openspec-flow.yml` from the
   current template
 
-#### Scenario: CLI bumps the ref on an existing shim
-- **WHEN** the user runs `npx @dwmkerr/openspec-flow shim --ref v0.3.0 --yes` in
-  a repo whose shim is pinned to `v0.2.0`
+#### Scenario: `init` bumps the ref on an existing shim
+- **WHEN** the user runs `npx @dwmkerr/openspec-flow init --ref v0.3.0 --yes`
+  in a repo whose shim is pinned to `v0.2.0`
 - **THEN** the CLI SHALL replace exactly the `@v0.2.0` token with `@v0.3.0` and
   leave all other lines unchanged
 
-#### Scenario: CLI is a no-op when the file already matches
+#### Scenario: `init` is a no-op when the file already matches
 - **WHEN** the user runs the CLI and the shim already matches the target template
 - **THEN** the CLI SHALL print "shim is up to date" and exit 0 without writing
+
+### Requirement: `init` reports required secret state without writing secret values
+
+The `init` command SHALL inspect the target repo's GitHub Actions secret set
+(via `gh api`) and report on the following secrets without ever printing or
+writing their values:
+
+- `ANTHROPIC_API_KEY` — required. Reused under its canonical name; the system
+  SHALL NOT rename it to an `OPENSPEC_FLOW_`-prefixed variant.
+- `OPENSPEC_FLOW_APP_ID` — optional. Required only for App-derived identity.
+- `OPENSPEC_FLOW_PRIVATE_KEY` — optional. Required only for App-derived identity.
+
+The CLI SHALL print, for each secret, one of `present`, `missing`, or
+`unknown (no `repo` scope on token)`. When `ANTHROPIC_API_KEY` is missing the
+CLI SHALL print a remediation line linking to the install docs and SHALL exit
+non-zero unless invoked with `--ignore-missing-secrets`. The CLI SHALL NOT
+write any secret value to the repo, to the shim, or to `.openspec-flow.yaml`.
+
+#### Scenario: `init` reports a missing required secret
+- **WHEN** the user runs `init` in a repo where `ANTHROPIC_API_KEY` is not set
+- **THEN** the CLI SHALL print `ANTHROPIC_API_KEY: missing` and a remediation link
+- **AND** SHALL exit non-zero unless `--ignore-missing-secrets` was passed
+
+#### Scenario: `init` does not rename third-party secrets
+- **WHEN** `init` writes or updates the shim
+- **THEN** the shim's `secrets:` block SHALL reference `ANTHROPIC_API_KEY` by
+  its canonical name and SHALL NOT introduce an `OPENSPEC_FLOW_ANTHROPIC*` alias
+
+### Requirement: `init` SHALL support a local `.openspec-flow.yaml` for non-secret configuration
+
+The `init` command SHALL, when invoked with `--write-config` (or its interactive equivalent), write a file `.openspec-flow.yaml` at the repo root capturing non-secret local configuration (e.g. model overrides, opt-out flags). The file SHALL NOT contain secret values. The reusable workflow and the CLI SHALL read this file at runtime when present and SHALL ignore unknown top-level keys for forward compatibility.
+
+The exact schema is specified in the follow-up `shim-init` change; this RFC
+only fixes the file's location, its no-secrets rule, and the read-side
+forward-compatibility contract.
+
+#### Scenario: Secret values never land in `.openspec-flow.yaml`
+- **WHEN** `init` writes `.openspec-flow.yaml`
+- **THEN** the file SHALL contain no key whose value is or could be a secret
+  (no API keys, no private keys, no tokens)
+
+#### Scenario: Unknown keys in `.openspec-flow.yaml` are ignored
+- **WHEN** the reusable workflow loads `.openspec-flow.yaml` and encounters a
+  top-level key it does not recognise
+- **THEN** the workflow SHALL log the unknown key at info level and continue
 
 ### Requirement: Identity flows from the App when installed, falls back otherwise
 

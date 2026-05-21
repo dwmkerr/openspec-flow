@@ -59,14 +59,17 @@ Alternatives considered:
 - **No shim, App-only**: user installs the App, Probot runs everything. Rejected:
   that's the current Mode B which is exactly what we're trying to back away from.
 
-### Decision 2: Three actors can mutate the shim — App, CLI, human
+### Decision 2: Two actors can mutate the shim — App, CLI — plus humans
 
 | Actor | When | What it does |
 |---|---|---|
 | App install event | `installation.created` / `installation_repositories.added` | Opens a PR adding the shim, the three labels, and a snippet in `README.md`. PR body explains opt-in. |
-| App drift check (periodic) | once per day per installation | If `@v<ref>` in the target repo is older than the latest published tag, opens a PR bumping it. Idempotent — no duplicate PRs. |
-| CLI (`npx @dwmkerr/openspec-flow shim`) | manual | Writes or updates the shim locally; no App needed. Used for previews, smoke tests, and repos that don't want the App. |
-| Human | manual | Edits the YAML directly. Drift check respects this — does not overwrite hand-edited fields outside the `uses:` line. |
+| CLI (`npx @dwmkerr/openspec-flow init`) | manual | Writes or updates the shim locally; checks/reports on required secrets; optionally writes `.openspec-flow.yaml`. No App needed. Used for previews, smoke tests, dry-runs under `act`, and repos that don't want the App. |
+| Human | manual | Edits the YAML directly. Future drift check (see follow-up) will respect this — does not overwrite hand-edited fields outside the `uses:` line. |
+
+Drift detection (a periodic bump PR when `@v<ref>` falls behind the latest
+published tag) is **deferred** to a follow-up change. A GitHub issue captures
+the design so it is not lost. This RFC does not specify drift behaviour.
 
 ### Decision 3: Identity is App-derived; runtime is Actions-hosted
 
@@ -75,7 +78,8 @@ The App's two jobs:
 1. **Mint installation tokens** so the runner can push commits authored by
    `openspec-flow[bot]` and modify `.github/workflows/*.yml` (which the default
    `GITHUB_TOKEN` cannot do).
-2. **Open PRs to manage the shim** on install and drift.
+2. **Open the install PR** that lands the shim on opt-in. (Drift PRs are a
+   future job — see the deferred follow-up.)
 
 The App does **not** clone repos, does **not** run Claude, does **not** open the
 spec/impl PRs. Those happen on the Actions runner.
@@ -86,13 +90,9 @@ the shim file. The bot still works; it just can't self-update.
 
 ### Decision 4: Probot survives only as a webhook bridge — and only if needed
 
-Without Probot, the App can still:
-
-- React to install events (install handler runs as a tiny Cloudflare Worker or a
-  long-lived Action in `dwmkerr/openspec-flow` listening to a `repository_dispatch`
-  / `installation` webhook).
-- Run the daily drift check as a scheduled workflow in `dwmkerr/openspec-flow`
-  itself, fanning out across installations via the GitHub App API.
+Without Probot, the App can still react to install events: the handler runs as
+a tiny Cloudflare Worker or a long-lived Action in `dwmkerr/openspec-flow`
+listening to a `repository_dispatch` / `installation` webhook.
 
 The remaining question is whether *runtime triggering* (issue labelled, PR
 commented) needs a bridge. Answer: **no**. The shim's `on:` block subscribes to
@@ -126,28 +126,54 @@ jobs:
       OPENSPEC_FLOW_PRIVATE_KEY: ${{ secrets.OPENSPEC_FLOW_PRIVATE_KEY || '' }}
 ```
 
-The only field that changes between versions is the `@v<n>` ref. Drift detection
-parses *only* that token.
+The only field that changes between versions is the `@v<n>` ref. Any future
+drift detector will parse *only* that token; everything else is hand-editable.
 
-Alternative considered: pin to a SHA. Rejected — SHA pinning is the right answer
-for security-paranoid orgs but kills the auto-bump workflow. Offer SHA pinning as
-an opt-out flag on the CLI for those who want it.
+Alternative considered: pin to a SHA. Rejected as the default — SHA pinning is
+the right answer for security-paranoid orgs but kills the (future) auto-bump
+workflow. Offer SHA pinning as an opt-out flag on the CLI for those who want it.
 
 ### Decision 6: One capability spec, not three
 
-The shim, the install PR, the drift PR, and the CLI all serve one user-visible
-concern: "how does my repo get and stay wired up". They share fields, labels,
-metadata, and identity rules. One spec captures the contract; future changes will
-modify it as the shim format evolves.
+The shim, the install PR, and the `init` CLI all serve one user-visible
+concern: "how does my repo get wired up". They share fields, labels,
+metadata, and identity rules. One spec captures the contract; future changes
+(including drift detection) will modify it as the shim format evolves.
+
+### Decision 7: `init` validates secrets but does not write them
+
+`init` is the canonical bootstrap command. In addition to writing the shim it
+**checks** which secrets the runtime needs and reports their state. It never
+writes a secret value — secrets live in GitHub Actions secret store or in a
+gitignored `.env`, never in the shim or in `.openspec-flow.yaml`.
+
+What `init` checks:
+
+- `ANTHROPIC_API_KEY` — required. Reused as-is if already set on the repo
+  (no rename). The cost of a parallel `OPENSPEC_FLOW_ANTHROPIC_API_KEY`
+  namespace would be a second secret to manage for every install for no
+  practical isolation gain.
+- `OPENSPEC_FLOW_APP_ID`, `OPENSPEC_FLOW_PRIVATE_KEY` — optional. Present
+  enables bot identity; absent triggers the documented `GITHUB_TOKEN`
+  fallback.
+
+The `OPENSPEC_FLOW_` prefix is the convention for **runtime configuration
+the bot owns** (App credentials, feature flags). Third-party secrets the bot
+merely consumes (`ANTHROPIC_API_KEY`) keep their canonical name so users can
+share them across tools (Claude Code, other agents). The reusable workflow
+maps secrets to env vars without re-prefixing inside the runner.
+
+`init` may also write an optional `.openspec-flow.yaml` capturing
+non-secret local configuration (model overrides, opt-out flags, custom label
+names if we add them). The file is hand-editable, gitignored if it contains
+per-developer overrides, and read at runtime by both the CLI and the reusable
+workflow. Schema is deferred to the `shim-init` follow-up change.
 
 ## Risks / Trade-offs
 
-- **[Risk] Users may merge the install PR but forget to add secrets.** → The
-  reusable workflow's preflight already fails loudly when `ANTHROPIC_API_KEY` is
-  empty. Document on the install PR body.
-- **[Risk] Drift bot opens noisy PRs.** → Daily check, one PR per installation
-  open at a time, body reuses the same marker comment so a re-run edits the
-  existing PR instead of opening a new one.
+- **[Risk] Users may merge the install PR but forget to add secrets.** → `init`
+  reports missing secrets up front, and the reusable workflow's preflight fails
+  loudly when `ANTHROPIC_API_KEY` is empty. Document both on the install PR body.
 - **[Risk] App permissions creep when we add features.** → Pin to the current
   permission set in the App registration spec; any addition is a new RFC.
 - **[Risk] CLI and App write conflicting shims.** → The CLI writes the same
@@ -159,17 +185,29 @@ modify it as the shim format evolves.
 - **[Trade-off] Public-repo only for free.** → Self-hosted runners or paid
   Actions minutes cover private repos. Document the cost story; do not eat it
   ourselves.
+- **[Trade-off] Local dry-runs under `act` have caveats.** → `act` (nektos/act)
+  can execute the shim against a local Docker runner without hitting GitHub,
+  but the App-token mint step (`actions/create-github-app-token`) only works
+  with a real private key bind-mounted in, and `secrets:` inheritance differs
+  from real Actions. Treat `act` as a smoke-test, not a faithful replica;
+  document the bind-mount recipe in the `shim-init` follow-up.
 
 ## Migration Plan
 
 This RFC ships as a spec-only change. No code lands. The implementation flows
 through subsequent OpenSpec changes:
 
-1. **`shim-cli`**: ship `npx @dwmkerr/openspec-flow shim` (write + update file).
+1. **`shim-init`**: ship `npx @dwmkerr/openspec-flow init` (write + update file,
+   validate secrets, optional `.openspec-flow.yaml`).
 2. **`shim-install-handler`**: App webhook handler that opens the install PR.
-3. **`shim-drift-detector`**: scheduled workflow that opens drift PRs.
-4. **`retire-probot-runtime`**: remove handlers from the Probot service, leaving
-   only the install/drift handlers. Optionally migrate those to a Worker.
+3. **`retire-probot-runtime`**: remove runtime handlers from the Probot service,
+   leaving only the install handler. Optionally migrate it to a Worker.
+
+A separate follow-up — **`shim-drift-detector`** — is filed as a GitHub issue
+and intentionally not scaffolded by this RFC. It will add a scheduled workflow
+that opens an idempotent bump PR per installation when the shim ref falls
+behind the latest tag. Splitting it out keeps this change focused on the
+install path and matches reviewer feedback.
 
 Rollback for each: revert the change; targets that already merged the shim PR
 keep working because the reusable workflow they `uses:` is unchanged.
@@ -182,7 +220,8 @@ keep working because the reusable workflow they `uses:` is unchanged.
    benchmark.
 2. **Does the install PR include a `.env.example` for `ANTHROPIC_API_KEY`, or
    just instructions?** Lean instructions — `.env` files in the repo are an
-   anti-pattern for secrets.
+   anti-pattern for secrets. `init` can scaffold a gitignored `.env` on demand
+   for local dev only.
 3. **Do we ship the same shim for org-level vs repo-level installs?** Yes —
    shim lives per-repo regardless. Org install just fans out the install PR
    across selected repos.
@@ -190,6 +229,12 @@ keep working because the reusable workflow they `uses:` is unchanged.
    users can stitch their own workflow? Not yet; would 3× the support surface.
    Revisit after the shim ships.
 5. **Versioning policy for the `@v<n>` ref**: major-pinned (`@v1`), minor-pinned
-   (`@v1.2`), or exact-pinned (`@v1.2.3`)? Lean minor-pinned with drift bot
-   bumping the minor automatically and surfacing major bumps as a separate
-   "breaking" PR.
+   (`@v1.2`), or exact-pinned (`@v1.2.3`)? Lean minor-pinned, with the future
+   drift detector bumping the minor automatically and surfacing major bumps as
+   a separate "breaking" PR. Decided in the deferred drift-detector change.
+6. **`.openspec-flow.yaml` schema and scope.** Decided in the `shim-init`
+   follow-up. Open: which fields are local-only vs committed, how it interacts
+   with org-level defaults, and whether it lives at repo root or under `.github/`.
+7. **`act` parity.** `init`'s dry-run path should be runnable under `act`, but
+   App-token mint and `secrets:` inheritance differ. Track which gaps matter
+   and document the bind-mount recipe in the `shim-init` follow-up.

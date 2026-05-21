@@ -24,12 +24,15 @@ runtime out of Probot in subsequent PRs.
 - Specify what the App installation does on install: it opens an **initial shim PR**
   against the target repo adding the shim file, the three labels, and a one-line
   `README` snippet. The user merges to opt in.
-- Specify what the App installation does on **version drift**: it opens a follow-up
-  shim PR bumping the `@v<n>` ref. Bot identity is the App; commits and PRs are
-  authored by `openspec-flow[bot]`.
-- Define the **CLI** (`npx @dwmkerr/openspec-flow shim`) as the offline / preview path
-  that writes or updates the same shim file. Useful for repos without the App
-  installed, for dry-runs, and for CI smoke tests.
+- Define the **CLI** (`npx @dwmkerr/openspec-flow init`) as the offline / preview path
+  that writes or updates the same shim file. It also surfaces secret state
+  (presence of `ANTHROPIC_API_KEY`, App credentials) and emits an optional
+  `.openspec-flow.yaml` for local configuration. Useful for repos without the
+  App installed, for dry-runs (executable under `act`), and for CI smoke tests.
+- **Drift detection is deferred.** This RFC notes drift as a follow-up only; a
+  GitHub issue captures the design (daily check, single-PR-per-installation
+  idempotency, bump-only on the `@v<n>` token). No drift requirement ships in
+  this change.
 - Carry the App-token mint (`actions/create-github-app-token`) inside the reusable
   workflow so the runner gets `workflows: write` and the agent commits attribute to
   `openspec-flow[bot]`. The user no longer needs to provision `OPENSPEC_FLOW_APP_ID`
@@ -41,10 +44,11 @@ runtime out of Probot in subsequent PRs.
 ## Capabilities
 
 ### New Capabilities
-- `shim-distribution`: defines the shim file format, the install-time and
-  drift-time PRs, the CLI command that writes/updates the shim, and the identity
-  contract (which actor opens the PR, what label is applied, what commit author is
-  used).
+- `shim-distribution`: defines the shim file format, the install-time PR, the
+  `init` CLI command that writes/updates the shim and validates secrets, and
+  the identity contract (which actor opens the PR, what label is applied, what
+  commit author is used). Drift detection is intentionally out of scope and
+  tracked as a follow-up issue.
 
 ### Modified Capabilities
 
