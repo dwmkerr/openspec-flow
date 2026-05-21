@@ -106,7 +106,12 @@ describe("handleCreateSpec", () => {
     expect(prArgs.body).toContain("openspec-flow:auto-maintained");
     expect(prArgs.body).toContain("issue: 10");
     expect(prArgs.body).toContain("change: add-csv-export");
-    expect(prArgs.body).toContain("Closes #10");
+    expect(prArgs.body).toContain("Refs #10");
+    // Spec PR must NOT use a GitHub auto-close keyword for the
+    // originating issue — only the impl PR closes it.
+    expect(prArgs.body).not.toMatch(/closes\s+#10/i);
+    expect(prArgs.body).not.toMatch(/fixes\s+#10/i);
+    expect(prArgs.body).not.toMatch(/resolves\s+#10/i);
     expect(opts.octokit.issues.addLabels).toHaveBeenCalledWith(
       expect.objectContaining({ labels: ["openspec:spec"] }),
     );

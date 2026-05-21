@@ -112,9 +112,14 @@ spec-pr: 43
 -->
 ```
 
-The PR body also contains a visible `Closes #42` line so GitHub auto-closes
-the issue when the impl PR merges. The HTML comment is the canonical
-linkage source; `Closes #N` is the fallback.
+The PR body also contains a visible issue reference line. The spec PR
+uses `Refs #42` (a non-closing reference) so merging the spec PR does
+**not** auto-close the originating issue — the issue must stay open
+until the impl PR lands. The impl PR uses `Closes #42` so GitHub
+auto-closes the issue when the impl PR merges. The HTML comment is
+the canonical linkage source; the visible `Refs #N` / `Closes #N`
+line is the human-readable backlink and a fallback the classifier
+can scan if needed.
 
 Inspect the metadata by viewing the raw PR body (press `e` to edit the
 description, or use `gh pr view <n> --json body -q .body`).

@@ -1,7 +1,8 @@
 // Parse the auto-maintained HTML comment metadata block that the
 // bot writes into spec / impl PR bodies (per CLAUDE.md). The block
 // is the canonical linkage between issue, spec PR, and impl PR;
-// `Closes #N` is the GitHub-facing fallback.
+// the visible `Refs #N` (spec PR) / `Closes #N` (impl PR) line is
+// the GitHub-facing fallback.
 
 export interface SpecPrMetadata {
   issue: number;

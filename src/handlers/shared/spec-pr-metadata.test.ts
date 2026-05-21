@@ -7,7 +7,7 @@ const block = (fields: Record<string, string>): string => {
 
 describe("parseSpecPrMetadata", () => {
   it("returns issue + change for a well-formed spec block", () => {
-    const body = `Summary text.\n\nCloses #42.\n\n${block({ issue: "42", kind: "spec", change: "add-csv-export" })}\n`;
+    const body = `Summary text.\n\nRefs #42.\n\n${block({ issue: "42", kind: "spec", change: "add-csv-export" })}\n`;
     expect(parseSpecPrMetadata(body)).toEqual({
       issue: 42,
       change: "add-csv-export",
