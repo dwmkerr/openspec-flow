@@ -7,7 +7,6 @@ import * as path from "node:path";
 import {
   README_MARKER_END,
   README_MARKER_START,
-  renderConfig,
   renderMinimalReadme,
   renderReadmeBlock,
   renderWorkflow,
@@ -16,7 +15,6 @@ import {
 export interface FsState {
   cwd: string;
   workflow: string | null;
-  config: string | null;
   readme: string | null;
 }
 
@@ -36,7 +34,6 @@ export interface PlanOptions {
 }
 
 const WORKFLOW_REL = ".github/workflows/openspec-flow.yml";
-const CONFIG_REL = ".openspec-flow.yaml";
 const README_REL = "README.md";
 
 const planWorkflow = (state: FsState, _opts: PlanOptions): Action => {
@@ -55,15 +52,6 @@ const planWorkflow = (state: FsState, _opts: PlanOptions): Action => {
     content: state.workflow,
     reason: "file diverges from template — re-run with --force to overwrite",
   };
-};
-
-const planConfig = (state: FsState): Action => {
-  const abs = path.join(state.cwd, CONFIG_REL);
-  if (state.config === null) {
-    return { kind: "write", path: abs, content: renderConfig(), reason: "creating config stub" };
-  }
-  // Never touch existing config. Schema lives in a follow-up (#49).
-  return { kind: "noop", path: abs, content: state.config, reason: "exists — leaving as-is" };
 };
 
 const replaceBetween = (haystack: string, start: string, end: string, replacement: string): string => {
@@ -129,7 +117,6 @@ const planReadme = (state: FsState, opts: PlanOptions): Action => {
 
 export const plan = (state: FsState, opts: PlanOptions = { force: false }): Action[] => [
   planWorkflow(state, opts),
-  planConfig(state),
   planReadme(state, opts),
 ];
 

@@ -65,3 +65,37 @@ export const detect = (cwd: string): Detections => ({
 
 export const openspecPresent = (d: Detections): boolean =>
   d.openspecDir || d.openspecBin || d.skillDirs.length > 0;
+
+export type SecretState = "present" | "absent" | "unknown";
+
+export interface SecretProbe {
+  available: boolean; // gh on PATH + repo resolves
+  reason?: string;    // why unavailable (no gh, no remote, gh errored)
+  anthropic: SecretState;
+}
+
+// Read-only `gh secret list` probe. Never logs or echoes values —
+// only presence/absence by name. Failure modes degrade to "unknown".
+export const probeSecrets = (cwd: string): SecretProbe => {
+  if (!which("gh")) {
+    return { available: false, reason: "gh CLI not on PATH", anthropic: "unknown" };
+  }
+  try {
+    // -R inferred from cwd's git remote when omitted; `gh secret list`
+    // exits non-zero if not in a GitHub-remote-bearing repo.
+    const out = execSync("gh secret list --json name", {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    const names = new Set<string>(
+      (JSON.parse(out) as Array<{ name: string }>).map((s) => s.name),
+    );
+    return {
+      available: true,
+      anthropic: names.has("ANTHROPIC_API_KEY") ? "present" : "absent",
+    };
+  } catch {
+    return { available: false, reason: "gh secret list failed (no remote or unauth?)", anthropic: "unknown" };
+  }
+};

@@ -7,7 +7,6 @@ import type { Action } from "./plan.js";
 
 export const readState = (cwd: string): {
   workflow: string | null;
-  config: string | null;
   readme: string | null;
 } => {
   const safeRead = (rel: string): string | null => {
@@ -19,7 +18,6 @@ export const readState = (cwd: string): {
   };
   return {
     workflow: safeRead(".github/workflows/openspec-flow.yml"),
-    config: safeRead(".openspec-flow.yaml"),
     readme: safeRead("README.md"),
   };
 };

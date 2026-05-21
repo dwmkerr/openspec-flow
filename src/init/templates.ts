@@ -33,26 +33,6 @@ jobs:
       OPENSPEC_FLOW_PRIVATE_KEY: \${{ secrets.OPENSPEC_FLOW_PRIVATE_KEY || '' }}
 `;
 
-export const renderConfig = (): string => `# openspec-flow runtime configuration.
-# Every field below is commented out — the bot uses safe defaults.
-# Uncomment to override.
-#
-# Docs: https://github.com/dwmkerr/openspec-flow
-
-# Override the model used by the agent for spec/impl generation.
-# model: claude-sonnet-4-6
-
-# Override the label names. Defaults shown.
-# labels:
-#   go:   openspec:go
-#   spec: openspec:spec
-#   impl: openspec:impl
-
-# Override the branch prefix used by impl PRs (default: feat).
-# branch:
-#   impl_prefix: feat
-`;
-
 export const renderReadmeBlock = (): string => `${README_MARKER_START}
 ## openspec-flow
 

@@ -2,7 +2,7 @@
 // and renders the report. Returns a process exit code.
 
 import chalk from "chalk";
-import { detect, openspecPresent, type Detections } from "./detect.js";
+import { detect, probeSecrets, type Detections, type SecretProbe } from "./detect.js";
 import { apply, readState } from "./apply.js";
 import { allNoop, plan, type Action } from "./plan.js";
 
@@ -18,29 +18,34 @@ const symbols = {
   noop: chalk.dim("·"),
   hint: chalk.yellow("!"),
   ok: chalk.green("✓"),
+  fail: chalk.red("✗"),
 };
 
 const renderDetections = (d: Detections): string[] => {
-  const lines: string[] = [];
   const fmt = (label: string, found: boolean, extra?: string) =>
     `  ${found ? symbols.ok : symbols.noop} ${label}${extra ? chalk.dim(` — ${extra}`) : ""}`;
-  lines.push(chalk.bold("Environment"));
-  lines.push(fmt("openspec/ directory", d.openspecDir));
-  lines.push(fmt("openspec CLI on PATH", d.openspecBin));
-  lines.push(
+  return [
+    chalk.bold("OpenSpec environment"),
+    fmt("openspec/ directory", d.openspecDir),
+    fmt("openspec CLI on PATH", d.openspecBin),
     fmt(
       "openspec-* skills",
       d.skillDirs.length > 0,
       d.skillDirs.length > 0 ? `${d.skillDirs.length} location(s)` : undefined,
     ),
-  );
-  if (!openspecPresent(d)) {
-    lines.push("");
-    lines.push(
-      `  ${symbols.hint} ${chalk.yellow("OpenSpec not detected")}. ` +
-        `Scaffold it first with: ${chalk.bold("npx @fission-ai/openspec init")}`,
-    );
-    lines.push(`    (openspec-flow will still write its workflow + config.)`);
+  ];
+};
+
+const renderSecrets = (s: SecretProbe): string[] => {
+  const lines: string[] = [chalk.bold("Secrets")];
+  if (!s.available) {
+    lines.push(`  ${symbols.noop} ANTHROPIC_API_KEY ${chalk.dim(`— check skipped (${s.reason})`)}`);
+    return lines;
+  }
+  if (s.anthropic === "present") {
+    lines.push(`  ${symbols.ok} ANTHROPIC_API_KEY ${chalk.dim("— set on repo")}`);
+  } else {
+    lines.push(`  ${symbols.fail} ANTHROPIC_API_KEY ${chalk.yellow("— missing; set before merging the setup PR")}`);
   }
   return lines;
 };
@@ -61,9 +66,9 @@ const renderNextSteps = (): string[] => [
   "",
   chalk.bold("Next steps"),
   `  1. ${chalk.dim("review the diff:")} ${chalk.cyan("git diff")}`,
-  `  2. ${chalk.dim("set the required secret on the repo:")} ${chalk.cyan("ANTHROPIC_API_KEY")}`,
+  `  2. ${chalk.dim("ensure")} ${chalk.cyan("ANTHROPIC_API_KEY")} ${chalk.dim("is set on the repo (Settings → Secrets)")}`,
   `  3. ${chalk.dim("commit on a feature branch and open a PR titled:")} ${chalk.cyan("chore: openspec-flow setup")}`,
-  `  4. ${chalk.dim("after merge, open an issue and add the")} ${chalk.cyan("openspec:go")} ${chalk.dim("label to try it.")}`,
+  `  4. ${chalk.dim("after merge, open an issue and add the")} ${chalk.cyan("openspec:go")} ${chalk.dim("label.")}`,
 ];
 
 export const runInit = (opts: InitOptions): number => {
@@ -76,6 +81,25 @@ export const runInit = (opts: InitOptions): number => {
 
   const detections = detect(opts.cwd);
   renderDetections(detections).forEach(log);
+
+  // Hard gate: without OpenSpec scaffolded, the workflow we write
+  // would have nothing to operate on. Fail loud now rather than
+  // ship a broken-on-day-one install.
+  if (!detections.openspecDir) {
+    log("");
+    log(chalk.red(`  ${symbols.fail} openspec/ not found in this repo.`));
+    log("");
+    log(chalk.bold("Run OpenSpec first:"));
+    log(`  ${chalk.cyan("npx @fission-ai/openspec init")}`);
+    log(chalk.dim("  That scaffolds openspec/, selects AI tools, and installs skills."));
+    log(chalk.dim("  Then re-run `openspec-flow init`."));
+    log("");
+    return 1;
+  }
+
+  log("");
+  const secrets = probeSecrets(opts.cwd);
+  renderSecrets(secrets).forEach(log);
   log("");
 
   const fs = readState(opts.cwd);
@@ -91,9 +115,6 @@ export const runInit = (opts: InitOptions): number => {
     return 0;
   }
 
-  // TTY guard: if not a TTY and --yes not passed, refuse to write.
-  // In a TTY without --yes we still apply (this slice skips the
-  // confirm prompt — defer to follow-up if it bites).
   if (!process.stdout.isTTY && !opts.yes) {
     log("");
     log(chalk.red("  refusing to run non-interactively without --yes"));
