@@ -44,6 +44,9 @@ const buildOctokit = () => ({
     createComment: jest.fn().mockResolvedValue({}),
     addLabels: jest.fn().mockResolvedValue({}),
   },
+  // Raw request() is what the status-comment helper uses for the
+  // PATCH /issues/comments/{id} milestone updates.
+  request: jest.fn().mockResolvedValue({ data: {} }),
   pulls: {
     create: jest.fn().mockResolvedValue({
       data: { number: 99, html_url: "https://github.com/o/r/pull/99" },
@@ -62,6 +65,8 @@ const baseOpts = (overrides: Partial<any> = {}) => {
     gitPushToken: "token",
     log,
     runner: jest.fn().mockResolvedValue("done"),
+    statusCommentId: 555,
+    statusTargetNumber: 10,
     ...overrides,
   } as any;
 };
@@ -105,12 +110,16 @@ describe("handleCreateSpec", () => {
     expect(opts.octokit.issues.addLabels).toHaveBeenCalledWith(
       expect.objectContaining({ labels: ["openspec:spec"] }),
     );
-    expect(opts.octokit.issues.createComment).toHaveBeenCalledWith(
-      expect.objectContaining({
-        issue_number: 10,
-        body: "spec PR opened: #99",
-      }),
+    // Status comment was PATCHed at milestones AND at the terminal
+    // success state. No separate createComment was posted.
+    const patchCalls = opts.octokit.request.mock.calls.filter(
+      (c: any) => c[0].startsWith("PATCH /repos/"),
     );
+    expect(patchCalls.length).toBeGreaterThanOrEqual(1);
+    const finalPatch = patchCalls[patchCalls.length - 1];
+    expect(finalPatch[1].comment_id).toBe(555);
+    expect(finalPatch[1].body).toBe("✅ spec PR opened: #99");
+    expect(opts.octokit.issues.createComment).not.toHaveBeenCalled();
     expect(removeWorkdir).toHaveBeenCalledWith("/tmp/openspec-flow/test-wd");
   });
 
@@ -144,11 +153,13 @@ describe("handleCreateSpec", () => {
     );
     expect(pushBranch).not.toHaveBeenCalled();
     expect(opts.octokit.pulls.create).not.toHaveBeenCalled();
-    expect(opts.octokit.issues.createComment).toHaveBeenCalledWith(
-      expect.objectContaining({
-        body: expect.stringContaining("❌ openspec-flow couldn't open a spec PR"),
-      }),
+    // Failure terminal-state PATCHes the status comment, no new POST.
+    const patchCalls = opts.octokit.request.mock.calls.filter(
+      (c: any) => c[0].startsWith("PATCH /repos/"),
     );
+    const finalPatch = patchCalls[patchCalls.length - 1];
+    expect(finalPatch[1].body).toContain("⚠️ openspec-flow failed");
+    expect(opts.octokit.issues.createComment).not.toHaveBeenCalled();
   });
 
   it("aborts and posts failure comment when agent produces no change", async () => {
@@ -159,11 +170,13 @@ describe("handleCreateSpec", () => {
       "agent didn't create any openspec changes",
     );
     expect(opts.octokit.pulls.create).not.toHaveBeenCalled();
-    expect(opts.octokit.issues.createComment).toHaveBeenCalledWith(
-      expect.objectContaining({
-        body: expect.stringContaining("❌ openspec-flow couldn't open a spec PR"),
-      }),
+    // Failure terminal-state PATCHes the status comment, no new POST.
+    const patchCalls = opts.octokit.request.mock.calls.filter(
+      (c: any) => c[0].startsWith("PATCH /repos/"),
     );
+    const finalPatch = patchCalls[patchCalls.length - 1];
+    expect(finalPatch[1].body).toContain("⚠️ openspec-flow failed");
+    expect(opts.octokit.issues.createComment).not.toHaveBeenCalled();
     expect(removeWorkdir).toHaveBeenCalled();
   });
 
@@ -175,11 +188,10 @@ describe("handleCreateSpec", () => {
 
     await expect(handleCreateSpec(opts)).rejects.toThrow("openspec-new-change skill");
     expect(opts.runner).not.toHaveBeenCalled();
-    expect(opts.octokit.issues.createComment).toHaveBeenCalledWith(
-      expect.objectContaining({
-        body: expect.stringContaining("openspec-new-change skill"),
-      }),
+    const patchCalls = opts.octokit.request.mock.calls.filter(
+      (c: any) => c[0].startsWith("PATCH /repos/"),
     );
+    expect(patchCalls[patchCalls.length - 1][1].body).toContain("openspec-new-change skill");
   });
 
   it("posts failure comment when agent throws", async () => {
@@ -188,8 +200,9 @@ describe("handleCreateSpec", () => {
     });
 
     await expect(handleCreateSpec(opts)).rejects.toThrow("api down");
-    expect(opts.octokit.issues.createComment).toHaveBeenCalledWith(
-      expect.objectContaining({ body: expect.stringContaining("api down") }),
+    const patchCalls = opts.octokit.request.mock.calls.filter(
+      (c: any) => c[0].startsWith("PATCH /repos/"),
     );
+    expect(patchCalls[patchCalls.length - 1][1].body).toContain("api down");
   });
 });

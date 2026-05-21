@@ -3,6 +3,8 @@ import { Intent, classify, describe } from "./intent.js";
 import { handleCreateSpec } from "./handlers/create-spec/index.js";
 import { handleCreateImpl } from "./handlers/create-impl/index.js";
 import { handleIterateSpec } from "./handlers/iterate-spec/index.js";
+import { createStatusComment } from "./handlers/shared/status-comment.js";
+import { statusReceived } from "./handlers/shared/status-bodies.js";
 
 // openspec-flow Probot entry point.
 //
@@ -116,21 +118,33 @@ const dispatch = async (
     return;
   }
 
-  // Eyes reaction is the fast deterministic ack. Comment follows as the
-  // substantive ack. Reaction is best-effort — never blocks the comment.
+  // Eyes reaction is the fast deterministic ack. Reaction is
+  // best-effort — never blocks the comment that follows.
   await reactEyes(context, issueNumber);
 
+  // One sticky status comment per intent. Body mutates from
+  // receipt → working → terminal state as the handler progresses.
+  // Working states show the animated GIF; terminal states drop it
+  // (the comment "stops moving" once work stops). Visible noops are
+  // terminal: the body is just the reason.
   const body =
-    intent.kind === "noop"
-      ? `${summary}`
-      : `**Intent:** ${summary}\n\n_Phase 2 will wire this to the agent. For now this is just the intent classifier confirming what would happen._`;
+    intent.kind === "noop" ? summary : statusReceived(summary);
 
-  await context.octokit.issues.createComment({
-    owner: context.repo().owner,
-    repo: context.repo().repo,
-    issue_number: issueNumber,
-    body,
-  });
+  let statusCommentId: number | undefined;
+  try {
+    statusCommentId = await createStatusComment(
+      context.octokit as any,
+      context.repo().owner,
+      context.repo().repo,
+      issueNumber,
+      body,
+    );
+  } catch (err) {
+    context.log.warn(
+      { ...eventContext(context), err: (err as Error).message },
+      "status comment create failed; handler will run without upsert",
+    );
+  }
 
   // Route actionable intents to their handlers. Handlers are bounded
   // best-effort: errors are caught and logged so a logic bug never
@@ -169,6 +183,8 @@ const dispatch = async (
           octokit: context.octokit as any,
           gitPushToken: token,
           log,
+          statusCommentId,
+          statusTargetNumber: issueNumber,
         });
       } else if (intent.kind === "create-impl") {
         await handleCreateImpl({
@@ -179,6 +195,8 @@ const dispatch = async (
           octokit: context.octokit as any,
           gitPushToken: token,
           log,
+          statusCommentId,
+          statusTargetNumber: issueNumber,
         });
       } else {
         // iterate-spec
@@ -189,6 +207,8 @@ const dispatch = async (
           octokit: context.octokit as any,
           gitPushToken: token,
           log,
+          statusCommentId,
+          statusTargetNumber: issueNumber,
         });
       }
     } catch (err) {

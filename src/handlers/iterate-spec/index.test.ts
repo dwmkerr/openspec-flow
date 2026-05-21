@@ -47,6 +47,7 @@ const buildOctokit = (opts: { body?: string | null; state?: string } = {}) => ({
     createComment: jest.fn().mockResolvedValue({}),
     addLabels: jest.fn().mockResolvedValue({}),
   },
+  request: jest.fn().mockResolvedValue({ data: {} }),
   pulls: {
     get: jest.fn().mockResolvedValue({
       data: {
@@ -68,6 +69,8 @@ const baseOpts = (overrides: Partial<any> = {}) => ({
   gitPushToken: "token",
   log: { info: jest.fn(), warn: jest.fn() },
   runner: jest.fn().mockResolvedValue("ok"),
+  statusCommentId: 555,
+  statusTargetNumber: 27,
   ...overrides,
 });
 
@@ -92,12 +95,13 @@ describe("handleIterateSpec", () => {
       "/tmp/openspec-flow/iterate-test-wd",
       "chore/26-rfc-shim",
     );
-    expect(opts.octokit.issues.createComment).toHaveBeenCalledWith(
-      expect.objectContaining({
-        issue_number: 27,
-        body: "spec updated by openspec-flow",
-      }),
+    const patchCalls = opts.octokit.request.mock.calls.filter(
+      (c: any) => c[0].startsWith("PATCH /repos/"),
     );
+    const finalPatch = patchCalls[patchCalls.length - 1];
+    expect(finalPatch[1].comment_id).toBe(555);
+    expect(finalPatch[1].body).toBe("✅ spec updated by openspec-flow");
+    expect(opts.octokit.issues.createComment).not.toHaveBeenCalled();
   });
 
   it("interpolates change context into the prompt", async () => {
@@ -136,11 +140,10 @@ describe("handleIterateSpec", () => {
 
     await expect(handleIterateSpec(opts)).rejects.toThrow("PR is closed");
     expect(opts.runner).not.toHaveBeenCalled();
-    expect(opts.octokit.issues.createComment).toHaveBeenCalledWith(
-      expect.objectContaining({
-        body: expect.stringContaining("PR is closed"),
-      }),
+    const patchCalls = opts.octokit.request.mock.calls.filter(
+      (c: any) => c[0].startsWith("PATCH /repos/"),
     );
+    expect(patchCalls[patchCalls.length - 1][1].body).toContain("PR is closed");
   });
 
   it("aborts when the spec PR body has no metadata block", async () => {
@@ -171,11 +174,10 @@ describe("handleIterateSpec", () => {
 
     await expect(handleIterateSpec(opts)).rejects.toThrow("change directory no longer exists");
     expect(pushBranch).not.toHaveBeenCalled();
-    expect(opts.octokit.issues.createComment).toHaveBeenCalledWith(
-      expect.objectContaining({
-        body: expect.stringContaining("change directory no longer exists"),
-      }),
+    const patchCalls = opts.octokit.request.mock.calls.filter(
+      (c: any) => c[0].startsWith("PATCH /repos/"),
     );
+    expect(patchCalls[patchCalls.length - 1][1].body).toContain("change directory no longer exists");
   });
 
   it("posts failure comment when preconditions fail", async () => {
@@ -186,11 +188,10 @@ describe("handleIterateSpec", () => {
 
     await expect(handleIterateSpec(opts)).rejects.toThrow("openspec-new-change skill");
     expect(opts.runner).not.toHaveBeenCalled();
-    expect(opts.octokit.issues.createComment).toHaveBeenCalledWith(
-      expect.objectContaining({
-        body: expect.stringContaining("openspec-new-change skill"),
-      }),
+    const patchCalls = opts.octokit.request.mock.calls.filter(
+      (c: any) => c[0].startsWith("PATCH /repos/"),
     );
+    expect(patchCalls[patchCalls.length - 1][1].body).toContain("openspec-new-change skill");
   });
 
   it("posts failure comment when agent throws", async () => {
@@ -199,8 +200,9 @@ describe("handleIterateSpec", () => {
     });
 
     await expect(handleIterateSpec(opts)).rejects.toThrow("api down");
-    expect(opts.octokit.issues.createComment).toHaveBeenCalledWith(
-      expect.objectContaining({ body: expect.stringContaining("api down") }),
+    const patchCalls = opts.octokit.request.mock.calls.filter(
+      (c: any) => c[0].startsWith("PATCH /repos/"),
     );
+    expect(patchCalls[patchCalls.length - 1][1].body).toContain("api down");
   });
 });
