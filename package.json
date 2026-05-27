@@ -12,6 +12,7 @@
   "files": [
     "dist",
     "public",
+    "templates",
     ".github/actions",
     ".github/workflows/openspec-flow.yml"
   ],

@@ -1,6 +1,16 @@
-// Content templates rendered by `openspec-flow init`. Pure strings.
-// Keep these in one place so the CLI and the (future) App install
-// handler render byte-identical output.
+// Content templates rendered by `openspec-flow init`.
+//
+// The workflow shim is the single source of truth at
+// `templates/openspec-flow.yml` in this repo (also the file the
+// future fetch-from-release path will download). It resolves at
+// repo root from both `dist/init/` and `src/init/` via `../../`,
+// since `templates/` is never copied into either tree.
+//
+// The README block is CLI-rendered prose, not a distributable
+// artefact, so it stays inline.
+
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 // HTML-comment markers bound the managed README block. Same comment
 // shape as the PR-body metadata block — invisible in rendered Markdown,
@@ -9,29 +19,28 @@ export const README_MARKER_START = "<!-- openspec-flow init-start -->";
 export const README_MARKER_END = "<!-- openspec-flow init-end -->";
 
 // Pinned to `main` while the package version is 0.0.0. Switch to
-// `@v<x>.<y>.<z>` once we cut a real release.
+// `@v<x>.<y>.<z>` once we cut a real release (see ideas.md —
+// fetch-from-release + version pin).
 const DEFAULT_REF = "main";
 
-export const renderWorkflow = (ref: string = DEFAULT_REF): string => `# Maintained by openspec-flow. Edit the \`uses:\` ref to upgrade.
-# Docs: https://github.com/dwmkerr/openspec-flow
-name: openspec-flow
-on:
-  issues:
-    types: [labeled]
-  pull_request:
-    types: [labeled]
-  pull_request_review_comment:
-    types: [created]
-  issue_comment:
-    types: [created]
-jobs:
-  flow:
-    uses: dwmkerr/openspec-flow/.github/workflows/openspec-flow.yml@${ref}
-    secrets:
-      ANTHROPIC_API_KEY: \${{ secrets.ANTHROPIC_API_KEY }}
-      OPENSPEC_FLOW_APP_ID: \${{ secrets.OPENSPEC_FLOW_APP_ID || '' }}
-      OPENSPEC_FLOW_PRIVATE_KEY: \${{ secrets.OPENSPEC_FLOW_PRIVATE_KEY || '' }}
-`;
+const WORKFLOW_TEMPLATE_PATH = join(
+  __dirname,
+  "..",
+  "..",
+  "templates",
+  "openspec-flow.yml",
+);
+
+const REF_LINE =
+  /(uses: dwmkerr\/openspec-flow\/\.github\/workflows\/openspec-flow\.yml@)\S+/;
+
+export const renderWorkflow = (ref: string = DEFAULT_REF): string => {
+  const base = readFileSync(WORKFLOW_TEMPLATE_PATH, "utf8");
+  if (ref === DEFAULT_REF) return base;
+  // Only the `@ref` token varies between versions; everything else
+  // is verbatim from the bundled template.
+  return base.replace(REF_LINE, `$1${ref}`);
+};
 
 export const renderReadmeBlock = (): string => `${README_MARKER_START}
 ## openspec-flow
