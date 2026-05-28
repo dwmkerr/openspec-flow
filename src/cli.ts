@@ -68,6 +68,9 @@ const usage = (): string => `usage:
   openspec-flow handle create-impl   --pr <spec-pr>   --repo <owner/repo>
   openspec-flow handle iterate-spec  --pr <spec-pr>   --repo <owner/repo>
   openspec-flow handle iterate-impl  --pr <impl-pr>   --repo <owner/repo>
+  openspec-flow dispatch
+    Action-mode entry. Reads \$GITHUB_EVENT_NAME / \$GITHUB_EVENT_PATH,
+    classifies the event, and routes through the shared dispatch core.
 `;
 
 const requireFlag = (flags: Record<string, string>, name: string): string => {
@@ -101,6 +104,61 @@ export const runCli = async (argv: string[]): Promise<number> => {
       force: args.flags.force === "true",
       yes: args.flags.yes === "true",
     });
+  }
+
+  // Action-mode entry point. Reads the GitHub event from the runner's
+  // $GITHUB_EVENT_* environment, classifies it with the same classify()
+  // the Probot adapter uses, and routes through the shared dispatch core.
+  if (args.command === "dispatch") {
+    const eventName = process.env.GITHUB_EVENT_NAME;
+    const eventPath = process.env.GITHUB_EVENT_PATH;
+    if (!eventName) throw new Error("GITHUB_EVENT_NAME is not set");
+    if (!eventPath) throw new Error("GITHUB_EVENT_PATH is not set");
+
+    const token =
+      process.env.OPENSPEC_FLOW_TOKEN || process.env.GITHUB_TOKEN || "";
+    if (!token) throw new Error("GITHUB_TOKEN is not set");
+
+    const { readFileSync } = await import("node:fs");
+    const payload = JSON.parse(readFileSync(eventPath, "utf8"));
+
+    const { classify } = await import("./intent.js");
+    const intent = classify(eventName, payload);
+
+    // Silent noop: nothing to do, log one line and exit clean.
+    if (intent.kind === "noop" && !intent.visible) {
+      stdoutLogger.info(`noop — ${intent.reason} (${eventName})`);
+      return 0;
+    }
+
+    const targetNum =
+      payload?.issue?.number ?? payload?.pull_request?.number ?? null;
+    if (targetNum === null) {
+      stdoutLogger.warn("actionable intent but no issue/PR number on payload");
+      return 0;
+    }
+
+    const repo = payload?.repository;
+    const owner = repo?.owner?.login;
+    const name = repo?.name;
+    if (!owner || !name) throw new Error("payload missing repository owner/name");
+
+    const { Octokit } = await import("@octokit/rest");
+    const octokit = new Octokit({ auth: token });
+
+    const { runDispatch } = await import("./dispatch.js");
+    await runDispatch(intent, {
+      octokit: octokit as any,
+      owner,
+      repo: name,
+      targetNumber: targetNum,
+      log: stdoutLogger,
+      // Action mode: the same token drives clone/push. App-token
+      // minting happens upstream in the workflow and arrives here as
+      // GITHUB_TOKEN/OPENSPEC_FLOW_TOKEN.
+      getToken: async () => token,
+    });
+    return 0;
   }
 
   if (args.command !== "handle" || !args.intent) {

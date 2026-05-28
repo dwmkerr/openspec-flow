@@ -1,18 +1,13 @@
 import type { Context, Probot } from "probot";
 import { Intent, classify, describe } from "./intent.js";
-import { dispatchTo } from "./handlers/registry.js";
-import {
-  createStatusComment,
-  updateStatusComment,
-} from "./handlers/shared/status-comment.js";
-import { statusReceived } from "./handlers/shared/status-bodies.js";
+import { runDispatch } from "./dispatch.js";
 
 // openspec-flow Probot entry point.
 //
-// Classify every relevant webhook event into a typed Intent, then dispatch.
-// Actionable + visible-noop intents post a comment on the target issue/PR;
-// silent noops log only. Production logic for each intent lives in
-// .github/actions/openspec-flow-* — port them in as later changes.
+// Classify every relevant webhook event into a typed Intent, then dispatch
+// through the shared core in src/dispatch.ts. The GitHub Action mode reaches
+// the same core via `openspec-flow dispatch`. Actionable + visible-noop
+// intents post a sticky status comment; silent noops log only.
 
 // Events we subscribe to. Anything not listed here doesn't reach us.
 const EVENTS = [
@@ -90,15 +85,15 @@ const targetTag = (payload: any): string => {
   return title ? ` [#${num} "${title}"]` : ` [#${num}]`;
 };
 
+// Probot adapter over the shared dispatch core. Handles the silent-noop
+// log shortcut and structured intent logging here (per-adapter concerns),
+// then builds DispatchDeps from the webhook Context and delegates.
 const dispatch = async (
   intent: Intent,
   context: Context<(typeof EVENTS)[number]>,
 ): Promise<void> => {
-  const summary = describe(intent);
-
   // Silent noops collapse to a single line so the actionable events
-  // stand out in the dev pane. Actionable + visible-noop intents keep
-  // the rich multi-line structured log for debugging.
+  // stand out in the dev pane.
   if (intent.kind === "noop" && !intent.visible) {
     const p = context.payload as any;
     const event = `${context.name}.${p?.action ?? "?"}`;
@@ -107,7 +102,7 @@ const dispatch = async (
   }
 
   context.log.info(
-    { ...eventContext(context), intent: intent.kind, summary },
+    { ...eventContext(context), intent: intent.kind, summary: describe(intent) },
     "intent",
   );
 
@@ -119,111 +114,30 @@ const dispatch = async (
     return;
   }
 
-  // Eyes reaction is the fast deterministic ack. Reaction is
-  // best-effort — never blocks the comment that follows.
-  await reactEyes(context, issueNumber);
+  // Handler-scoped log uses the root logger so streamed agent chunks
+  // aren't tagged with the webhook delivery id (which would multiply
+  // by ~50 lines per intent and obscure the actual reasoning).
+  const handlerLog = rootLog ?? context.log;
 
-  // One sticky status comment per intent. Body mutates from
-  // receipt → working → terminal state as the handler progresses.
-  // Working states show the animated GIF; terminal states drop it
-  // (the comment "stops moving" once work stops). Visible noops are
-  // terminal: the body is just the reason.
-  const body =
-    intent.kind === "noop" ? summary : statusReceived(summary);
-
-  let statusCommentId: number | undefined;
-  try {
-    statusCommentId = await createStatusComment(
-      context.octokit as any,
-      context.repo().owner,
-      context.repo().repo,
-      issueNumber,
-      body,
-    );
-  } catch (err) {
-    context.log.warn(
-      { ...eventContext(context), err: (err as Error).message },
-      "status comment create failed; handler will run without upsert",
-    );
-  }
-
-  // Visible-noop intents are terminal at this point: the sticky
-  // comment carries the reason and there's no handler to run.
-  if (intent.kind === "noop") return;
-
-  // Route actionable intents through the registry. Adding a new
-  // Intent variant without updating src/handlers/registry.ts fails
-  // tsc — silent drops are structurally impossible.
-  try {
-    const auth = (await context.octokit.auth({ type: "installation" })) as {
-      token?: string;
-    };
-    const token = auth?.token;
-    if (!token) throw new Error("could not obtain installation token");
-
-    // Handler-scoped log uses the root logger so streamed agent
-    // chunks aren't tagged with the webhook delivery id (which
-    // would multiply by ~50 lines per intent and obscure the
-    // actual reasoning). Errors are still logged via context.log
-    // below to keep delivery correlation on the failure record.
-    const handlerLog = rootLog ?? context.log;
-    const log = {
+  await runDispatch(intent, {
+    octokit: context.octokit as any,
+    owner: context.repo().owner,
+    repo: context.repo().repo,
+    targetNumber: issueNumber,
+    log: {
       info: (m: string) => handlerLog.info(m),
       warn: (m: string) => handlerLog.warn(m),
-    };
-
-    const result = await dispatchTo(intent, {
-      owner: context.repo().owner,
-      repo: context.repo().repo,
-      octokit: context.octokit as any,
-      gitPushToken: token,
-      log,
-      statusCommentId,
-      statusTargetNumber: issueNumber,
-    });
-
-    if (!result.dispatched) {
-      // Classified intent has no handler yet. Surface it on the
-      // sticky status comment so the reviewer doesn't see
-      // "Starting…" hang forever.
-      context.log.warn(
-        { ...eventContext(context), kind: result.kind },
-        `intent ${result.kind} classified but not implemented`,
-      );
-      if (statusCommentId !== undefined) {
-        await updateStatusComment(
-          context.octokit as any,
-          context.repo().owner,
-          context.repo().repo,
-          statusCommentId,
-          `❌ \`${result.kind}\` is classified but not implemented yet — manage manually.`,
-          { warn: (m: string) => context.log.warn(m) },
-        );
-      }
-    }
-  } catch (err) {
-    context.log.error(
-      { ...eventContext(context), err: (err as Error).message },
-      `${intent.kind} handler failed`,
-    );
-  }
-};
-
-const reactEyes = async (
-  context: Context<(typeof EVENTS)[number]>,
-  issueNumber: number,
-): Promise<void> => {
-  try {
-    await context.octokit.reactions.createForIssue({
-      owner: context.repo().owner,
-      repo: context.repo().repo,
-      issue_number: issueNumber,
-      content: "eyes",
-    });
-  } catch (err) {
-    context.log.warn(
-      { ...eventContext(context), err: (err as Error).message },
-      "eyes reaction failed",
-    );
-  }
+    },
+    getToken: async () => {
+      const auth = (await context.octokit.auth({ type: "installation" })) as {
+        token?: string;
+      };
+      const token = auth?.token;
+      if (!token) throw new Error("could not obtain installation token");
+      return token;
+    },
+    // Keep delivery correlation on the failure record via context.log.
+    logError: (msg, err) =>
+      context.log.error({ ...eventContext(context), err: err.message }, msg),
+  });
 };
