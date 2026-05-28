@@ -17,7 +17,7 @@
     ".github/workflows/openspec-flow.yml"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/copy-assets.mjs",
     "build:watch": "tsc -w",
     "dev": "tsx watch src/server.ts",
     "cli": "tsx src/cli.ts",
