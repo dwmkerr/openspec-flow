@@ -1,9 +1,9 @@
-// Content templates rendered by `openspec-flow init`.
+// Content templates rendered by `openspec-flow install`.
 //
 // The workflow shim is the single source of truth at
 // `templates/openspec-flow.yml` in this repo (also the file the
 // future fetch-from-release path will download). It resolves at
-// repo root from both `dist/init/` and `src/init/` via `../../`,
+// repo root from both `dist/install/` and `src/install/` via `../../`,
 // since `templates/` is never copied into either tree.
 //
 // The README block is CLI-rendered prose, not a distributable
@@ -15,8 +15,8 @@ import { join } from "node:path";
 // HTML-comment markers bound the managed README block. Same comment
 // shape as the PR-body metadata block — invisible in rendered Markdown,
 // machine-readable, survives copy-paste.
-export const README_MARKER_START = "<!-- openspec-flow init-start -->";
-export const README_MARKER_END = "<!-- openspec-flow init-end -->";
+export const README_MARKER_START = "<!-- openspec-flow install-start -->";
+export const README_MARKER_END = "<!-- openspec-flow install-end -->";
 
 // Pinned to `main` while the package version is 0.0.0. Switch to
 // `@v<x>.<y>.<z>` once we cut a real release (see ideas.md —

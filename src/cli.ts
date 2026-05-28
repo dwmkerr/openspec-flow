@@ -61,9 +61,11 @@ const stdoutLogger = {
 };
 
 const usage = (): string => `usage:
-  openspec-flow init [--yes] [--force] [--path <dir>]
+  openspec-flow install [--yes] [--force] [--path <dir>]
     Scaffolds .github/workflows/openspec-flow.yml and a README block.
     Requires openspec/ already present (run \`openspec init\` first).
+  openspec-flow uninstall [--yes] [--force] [--path <dir>]
+    Removes the workflow + managed README block; prints label-delete commands.
   openspec-flow handle create-spec   --issue <n>      --repo <owner/repo>
   openspec-flow handle create-impl   --pr <spec-pr>   --repo <owner/repo>
   openspec-flow handle iterate-spec  --pr <spec-pr>   --repo <owner/repo>
@@ -94,12 +96,24 @@ const fetchIssueTitle = (repo: string, issue: number): string => {
 export const runCli = async (argv: string[]): Promise<number> => {
   const args = parseArgs(argv);
 
-  if (args.command === "init") {
-    const { runInit } = await import("./init/index.js");
+  if (args.command === "install") {
+    const { runInstall } = await import("./install/index.js");
     const cwd = args.flags.path
       ? require("node:path").resolve(args.flags.path)
       : process.cwd();
-    return runInit({
+    return runInstall({
+      cwd,
+      force: args.flags.force === "true",
+      yes: args.flags.yes === "true",
+    });
+  }
+
+  if (args.command === "uninstall") {
+    const { runUninstall } = await import("./install/uninstall.js");
+    const cwd = args.flags.path
+      ? require("node:path").resolve(args.flags.path)
+      : process.cwd();
+    return runUninstall({
       cwd,
       force: args.flags.force === "true",
       yes: args.flags.yes === "true",
