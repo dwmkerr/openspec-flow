@@ -14,3 +14,4 @@
 - [ ] setup local phoenix to see llm calls / claude logs
 - [ ] keep logs for later viewing
 - [ ] claude action style spinner when the agent is working, upserted comment or similar, this is more complex but worth doing (i.e. what the agent is doing, what the result is)
+- [ ] `openspec-flow init`: fetch the workflow template from the latest release instead of bundling. Resolve the `@ref` to the latest tag, with a `--ref vX.Y.Z` override and a bundled fallback when offline / no release exists. Template lives at `templates/openspec-flow.yml`. Needs the repo to be public (or release assets readable) for cross-repo fetch + reusable-workflow `uses:` access.

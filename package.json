@@ -12,6 +12,7 @@
   "files": [
     "dist",
     "public",
+    "templates",
     ".github/actions",
     ".github/workflows/openspec-flow.yml"
   ],
@@ -21,7 +22,7 @@
     "dev": "tsx watch src/server.ts",
     "cli": "tsx src/cli.ts",
     "dev:tunnel:smee": "smee -u $(cat .smee-url 2>/dev/null || echo 'https://smee.io/REPLACE-ME') --path /api/github/webhooks --port 3000",
-    "dev:tunnel:ngrok": "ngrok http --url=https://stamp-liftoff-safari.ngrok-free.dev 3000",
+    "dev:tunnel:ngrok": "ngrok http --url=${NGROK_DOMAIN:?set NGROK_DOMAIN in .env} 3000",
     "dev:tunnel": "npm run dev:tunnel:ngrok",
     "start": "node dist/index.js",
     "lint": "eslint .",
