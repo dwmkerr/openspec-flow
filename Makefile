@@ -33,6 +33,16 @@ typecheck: # Type-check the TypeScript source.
 build: # Compile TypeScript to dist/.
 	npm run build
 
+.PHONY: install
+install: build # Build and link the `openspec-flow` CLI globally for local testing.
+	npm link
+	@echo "linked — try: openspec-flow install --yes (in a target repo)"
+
+.PHONY: uninstall
+uninstall: # Unlink the globally-linked `openspec-flow` CLI.
+	npm unlink -g @dwmkerr/openspec-flow || true
+	@echo "unlinked"
+
 .PHONY: test-create-issue
 test-create-issue: # Smoke test: create-spec intent. Fresh issue + openspec:go.
 	./tests/scripts/test-create-issue.sh

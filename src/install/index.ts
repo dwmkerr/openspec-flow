@@ -1,4 +1,4 @@
-// Orchestrator for `openspec-flow init`. Wires detect → plan → apply
+// Orchestrator for `openspec-flow install`. Wires detect → plan → apply
 // and renders the report. Returns a process exit code.
 
 import chalk from "chalk";
@@ -13,7 +13,7 @@ import {
 import { apply, readState } from "./apply.js";
 import { allNoop, plan, type Action } from "./plan.js";
 
-export interface InitOptions {
+export interface InstallOptions {
   cwd: string;
   force: boolean;
   yes: boolean;
@@ -87,7 +87,7 @@ const renderLabelCommands = (l: LabelProbe): string[] => {
       `  ${chalk.cyan(`gh label create "${m.name}" --color ${m.color} --description "${m.description}"`)}`,
     );
   }
-  lines.push(chalk.dim("  (a future `openspec-flow init --github-labels` will run these for you)"));
+  lines.push(chalk.dim("  (a future `openspec-flow install --github-labels` will run these for you)"));
   return lines;
 };
 
@@ -112,11 +112,11 @@ const renderNextSteps = (): string[] => [
   `  4. ${chalk.dim("after merge, open an issue and add the")} ${chalk.cyan("openspec:go")} ${chalk.dim("label.")}`,
 ];
 
-export const runInit = (opts: InitOptions): number => {
+export const runInstall = (opts: InstallOptions): number => {
   const log = (line: string) => process.stdout.write(line + "\n");
 
   log("");
-  log(chalk.bold.magenta("openspec-flow init"));
+  log(chalk.bold.magenta("openspec-flow install"));
   log(chalk.dim(`  working in: ${opts.cwd}`));
   log("");
 
@@ -133,7 +133,7 @@ export const runInit = (opts: InitOptions): number => {
     log(chalk.bold("Run OpenSpec first:"));
     log(`  ${chalk.cyan("npx @fission-ai/openspec init")}`);
     log(chalk.dim("  That scaffolds openspec/, selects AI tools, and installs skills."));
-    log(chalk.dim("  Then re-run `openspec-flow init`."));
+    log(chalk.dim("  Then re-run `openspec-flow install`."));
     log("");
     return 1;
   }
