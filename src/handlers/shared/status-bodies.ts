@@ -41,5 +41,7 @@ export const statusImplPrOpened = (prNumber: number): string =>
 
 export const statusSpecUpdated = (): string => `✅ spec updated by openspec-flow`;
 
+export const statusImplUpdated = (): string => `✅ impl updated by openspec-flow`;
+
 export const statusFailure = (error: string): string =>
   `⚠️ openspec-flow failed: ${error}. See dev logs for trace.`;

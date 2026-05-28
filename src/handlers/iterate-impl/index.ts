@@ -1,0 +1,150 @@
+// iterate-impl handler. Reviewer applied `openspec:go` on an open
+// impl PR. We clone, check out the impl branch, give the agent the
+// PR + issue context, let it rewrite code/tests/docs, and commit on
+// the existing branch. Mirrors iterate-spec, scoped to code.
+
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { runAgent, type RunAgentLogger } from "../../agent/run.js";
+import { createWorkdir, removeWorkdir } from "../create-spec/workdir.js";
+import {
+  cloneRepo,
+  configIdentity,
+  fetchAndCheckoutBranch,
+  headSha,
+  pushBranch,
+} from "../create-spec/git.js";
+import { parseImplPrMetadata } from "../shared/impl-pr-metadata.js";
+import { updateStatusComment } from "../shared/status-comment.js";
+import {
+  statusReadingPr,
+  statusPushing,
+  statusImplUpdated,
+  statusFailure,
+} from "../shared/status-bodies.js";
+import { verifyIterateImplWorkdir } from "./verify.js";
+import type { MinimalOctokit } from "../create-impl/index.js";
+
+const PROMPT_TEMPLATE = readFileSync(join(__dirname, "prompt.md"), "utf8");
+
+export interface HandleIterateImplOpts {
+  owner: string;
+  repo: string;
+  implPrNumber: number;
+  octokit: MinimalOctokit;
+  gitPushToken: string;
+  log: RunAgentLogger;
+  botIdentity?: { name: string; email: string };
+  statusCommentId?: number;
+  statusTargetNumber?: number;
+  runner?: typeof runAgent;
+}
+
+const DEFAULT_BOT_IDENTITY = {
+  name: "openspec-flow[bot]",
+  email: "openspec-flow[bot]@users.noreply.github.com",
+};
+
+const interpolate = (template: string, vars: Record<string, string>): string =>
+  template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`);
+
+export const handleIterateImpl = async (
+  opts: HandleIterateImplOpts,
+): Promise<void> => {
+  const identity = opts.botIdentity ?? DEFAULT_BOT_IDENTITY;
+  const run = opts.runner ?? runAgent;
+
+  let workdir = "";
+
+  const statusLog = { warn: opts.log.warn };
+  const setStatus = (body: string) =>
+    updateStatusComment(
+      opts.octokit as any,
+      opts.owner,
+      opts.repo,
+      opts.statusCommentId,
+      body,
+      statusLog,
+    );
+
+  try {
+    opts.log.info(`iterate-impl: starting for impl PR #${opts.implPrNumber}`);
+
+    const pr = await opts.octokit.pulls.get({
+      owner: opts.owner,
+      repo: opts.repo,
+      pull_number: opts.implPrNumber,
+    });
+
+    if (pr.data.state !== "open") {
+      throw new Error("PR is closed");
+    }
+
+    const meta = parseImplPrMetadata(pr.data.body);
+    if (!meta) {
+      throw new Error(
+        `impl PR #${opts.implPrNumber} body has no openspec-flow impl metadata block`,
+      );
+    }
+
+    const branch = pr.data.head.ref;
+    const { change: changeName, issue: issueNumber } = meta;
+
+    workdir = createWorkdir(opts.implPrNumber);
+    opts.log.info(`iterate-impl: workdir=${workdir} branch=${branch}`);
+
+    cloneRepo(`${opts.owner}/${opts.repo}`, workdir, opts.gitPushToken);
+    configIdentity(workdir, identity.name, identity.email);
+    fetchAndCheckoutBranch(workdir, branch);
+
+    const prompt = interpolate(PROMPT_TEMPLATE, {
+      changeName,
+      prNumber: String(opts.implPrNumber),
+      issueNumber: String(issueNumber),
+      branch,
+      repo: `${opts.owner}/${opts.repo}`,
+    });
+
+    await setStatus(statusReadingPr(opts.implPrNumber));
+
+    const headBefore = headSha(workdir);
+
+    await run({
+      prompt,
+      cwd: workdir,
+      log: opts.log,
+      options: {
+        permissionMode: "bypassPermissions",
+        env: { ...process.env, GH_TOKEN: opts.gitPushToken },
+      } as any,
+    });
+
+    const headAfter = headSha(workdir);
+    if (headBefore === headAfter) {
+      throw new Error(
+        "agent didn't commit any changes — HEAD is unchanged after the run",
+      );
+    }
+
+    const verify = verifyIterateImplWorkdir(workdir);
+    if (!verify.ok) {
+      throw new Error(verify.reason!);
+    }
+    opts.log.info(`iterate-impl: workdir verified — code mutated, committed`);
+
+    await setStatus(statusPushing());
+
+    pushBranch(workdir, branch);
+    opts.log.info(`iterate-impl: pushed ${branch}`);
+
+    await setStatus(statusImplUpdated());
+
+    opts.log.info(`iterate-impl: done`);
+  } catch (err) {
+    const msg = (err as Error).message;
+    await setStatus(statusFailure(msg));
+    throw err;
+  } finally {
+    if (workdir) removeWorkdir(workdir);
+  }
+};

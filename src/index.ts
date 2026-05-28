@@ -1,9 +1,10 @@
 import type { Context, Probot } from "probot";
 import { Intent, classify, describe } from "./intent.js";
-import { handleCreateSpec } from "./handlers/create-spec/index.js";
-import { handleCreateImpl } from "./handlers/create-impl/index.js";
-import { handleIterateSpec } from "./handlers/iterate-spec/index.js";
-import { createStatusComment } from "./handlers/shared/status-comment.js";
+import { dispatchTo } from "./handlers/registry.js";
+import {
+  createStatusComment,
+  updateStatusComment,
+} from "./handlers/shared/status-comment.js";
 import { statusReceived } from "./handlers/shared/status-bodies.js";
 
 // openspec-flow Probot entry point.
@@ -146,77 +147,65 @@ const dispatch = async (
     );
   }
 
-  // Route actionable intents to their handlers. Handlers are bounded
-  // best-effort: errors are caught and logged so a logic bug never
-  // crashes the webhook (Probot would otherwise retry on throw).
-  if (
-    intent.kind === "create-spec" ||
-    intent.kind === "create-impl" ||
-    intent.kind === "iterate-spec"
-  ) {
-    try {
-      // Mint an installation token so the handler can `git push` and
-      // give the agent's Bash subprocess a GH_TOKEN for `gh issue view`.
-      const auth = (await context.octokit.auth({ type: "installation" })) as {
-        token?: string;
-      };
-      const token = auth?.token;
-      if (!token) throw new Error("could not obtain installation token");
+  // Visible-noop intents are terminal at this point: the sticky
+  // comment carries the reason and there's no handler to run.
+  if (intent.kind === "noop") return;
 
-      // Handler-scoped log uses the root logger so streamed agent
-      // chunks aren't tagged with the webhook delivery id (which
-      // would multiply by ~50 lines per intent and obscure the
-      // actual reasoning). Errors are still logged via context.log
-      // below to keep delivery correlation on the failure record.
-      const handlerLog = rootLog ?? context.log;
-      const log = {
-        info: (m: string) => handlerLog.info(m),
-        warn: (m: string) => handlerLog.warn(m),
-      };
+  // Route actionable intents through the registry. Adding a new
+  // Intent variant without updating src/handlers/registry.ts fails
+  // tsc — silent drops are structurally impossible.
+  try {
+    const auth = (await context.octokit.auth({ type: "installation" })) as {
+      token?: string;
+    };
+    const token = auth?.token;
+    if (!token) throw new Error("could not obtain installation token");
 
-      if (intent.kind === "create-spec") {
-        await handleCreateSpec({
-          owner: context.repo().owner,
-          repo: context.repo().repo,
-          issueNumber: intent.issueNumber,
-          issueTitle: intent.title,
-          octokit: context.octokit as any,
-          gitPushToken: token,
-          log,
-          statusCommentId,
-          statusTargetNumber: issueNumber,
-        });
-      } else if (intent.kind === "create-impl") {
-        await handleCreateImpl({
-          owner: context.repo().owner,
-          repo: context.repo().repo,
-          mode: "sequential",
-          specPrNumber: intent.specPrNumber,
-          octokit: context.octokit as any,
-          gitPushToken: token,
-          log,
-          statusCommentId,
-          statusTargetNumber: issueNumber,
-        });
-      } else {
-        // iterate-spec
-        await handleIterateSpec({
-          owner: context.repo().owner,
-          repo: context.repo().repo,
-          specPrNumber: intent.prNumber,
-          octokit: context.octokit as any,
-          gitPushToken: token,
-          log,
-          statusCommentId,
-          statusTargetNumber: issueNumber,
-        });
-      }
-    } catch (err) {
-      context.log.error(
-        { ...eventContext(context), err: (err as Error).message },
-        `${intent.kind} handler failed`,
+    // Handler-scoped log uses the root logger so streamed agent
+    // chunks aren't tagged with the webhook delivery id (which
+    // would multiply by ~50 lines per intent and obscure the
+    // actual reasoning). Errors are still logged via context.log
+    // below to keep delivery correlation on the failure record.
+    const handlerLog = rootLog ?? context.log;
+    const log = {
+      info: (m: string) => handlerLog.info(m),
+      warn: (m: string) => handlerLog.warn(m),
+    };
+
+    const result = await dispatchTo(intent, {
+      owner: context.repo().owner,
+      repo: context.repo().repo,
+      octokit: context.octokit as any,
+      gitPushToken: token,
+      log,
+      statusCommentId,
+      statusTargetNumber: issueNumber,
+    });
+
+    if (!result.dispatched) {
+      // Classified intent has no handler yet. Surface it on the
+      // sticky status comment so the reviewer doesn't see
+      // "Starting…" hang forever.
+      context.log.warn(
+        { ...eventContext(context), kind: result.kind },
+        `intent ${result.kind} classified but not implemented`,
       );
+      if (statusCommentId !== undefined) {
+        await updateStatusComment(
+          context.octokit as any,
+          context.repo().owner,
+          context.repo().repo,
+          statusCommentId,
+          `❌ \`${result.kind}\` is classified but not implemented yet — manage manually.`,
+          { warn: (m: string) => context.log.warn(m) },
+        );
+      }
     }
+  } catch (err) {
+    context.log.error(
+      { ...eventContext(context), err: (err as Error).message },
+      `${intent.kind} handler failed`,
+    );
   }
 };
 

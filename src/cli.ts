@@ -64,9 +64,10 @@ const usage = (): string => `usage:
   openspec-flow init [--yes] [--force] [--path <dir>]
     Scaffolds .github/workflows/openspec-flow.yml and a README block.
     Requires openspec/ already present (run \`openspec init\` first).
-  openspec-flow handle create-spec --issue <n> --repo <owner/repo>
-  openspec-flow handle create-impl --pr <spec-pr> --repo <owner/repo>
-  openspec-flow handle iterate-spec --pr <spec-pr> --repo <owner/repo>
+  openspec-flow handle create-spec   --issue <n>      --repo <owner/repo>
+  openspec-flow handle create-impl   --pr <spec-pr>   --repo <owner/repo>
+  openspec-flow handle iterate-spec  --pr <spec-pr>   --repo <owner/repo>
+  openspec-flow handle iterate-impl  --pr <impl-pr>   --repo <owner/repo>
 `;
 
 const requireFlag = (flags: Record<string, string>, name: string): string => {
@@ -147,6 +148,27 @@ export const runCli = async (argv: string[]): Promise<number> => {
       owner,
       repo: name,
       specPrNumber: specPr,
+      octokit: octokit as any,
+      gitPushToken: token,
+      log: stdoutLogger,
+    });
+    return 0;
+  }
+
+  if (args.intent === "iterate-impl") {
+    const implPr = Number(requireFlag(args.flags, "pr"));
+    const repo = requireFlag(args.flags, "repo");
+    const [owner, name] = repo.split("/");
+    if (!owner || !name) throw new Error(`--repo must be owner/name (got "${repo}")`);
+    const { Octokit } = await import("@octokit/rest");
+    const { handleIterateImpl } = await import("./handlers/iterate-impl/index.js");
+    const token = execSync("gh auth token", { encoding: "utf8" }).trim();
+    if (!token) throw new Error("gh auth token returned empty; run `gh auth login`");
+    const octokit = new Octokit({ auth: token });
+    await handleIterateImpl({
+      owner,
+      repo: name,
+      implPrNumber: implPr,
       octokit: octokit as any,
       gitPushToken: token,
       log: stdoutLogger,
