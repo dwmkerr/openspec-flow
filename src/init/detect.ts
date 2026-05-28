@@ -99,3 +99,50 @@ export const probeSecrets = (cwd: string): SecretProbe => {
     return { available: false, reason: "gh secret list failed (no remote or unauth?)", anthropic: "unknown" };
   }
 };
+
+// The three contract labels (CLAUDE.md). Canonical color + description
+// so a printed `gh label create` produces a consistent appearance
+// rather than the grey auto-created label GitHub makes on first apply.
+export interface ContractLabel {
+  name: string;
+  color: string;
+  description: string;
+}
+
+export const CONTRACT_LABELS: ContractLabel[] = [
+  { name: "openspec:go", color: "0969da", description: "Trigger: start or re-run openspec-flow" },
+  { name: "openspec:spec", color: "8250df", description: "Spec PR raised by openspec-flow" },
+  { name: "openspec:impl", color: "1a7f37", description: "Implementation PR raised by openspec-flow" },
+];
+
+export interface LabelProbe {
+  available: boolean;
+  reason?: string;
+  // Contract labels not present on the repo. Empty when all present.
+  missing: ContractLabel[];
+}
+
+// Read-only `gh label list` probe. Never creates, edits, or deletes a
+// label — missing ones are reported so the caller can print the
+// create commands. Failure modes degrade to "unavailable".
+export const probeLabels = (cwd: string): LabelProbe => {
+  if (!which("gh")) {
+    return { available: false, reason: "gh CLI not on PATH", missing: [] };
+  }
+  try {
+    const out = execSync("gh label list --json name", {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    const have = new Set<string>(
+      (JSON.parse(out) as Array<{ name: string }>).map((l) => l.name),
+    );
+    return {
+      available: true,
+      missing: CONTRACT_LABELS.filter((l) => !have.has(l.name)),
+    };
+  } catch {
+    return { available: false, reason: "gh label list failed (no remote or unauth?)", missing: [] };
+  }
+};

@@ -2,7 +2,14 @@
 // and renders the report. Returns a process exit code.
 
 import chalk from "chalk";
-import { detect, probeSecrets, type Detections, type SecretProbe } from "./detect.js";
+import {
+  detect,
+  probeSecrets,
+  probeLabels,
+  type Detections,
+  type SecretProbe,
+  type LabelProbe,
+} from "./detect.js";
 import { apply, readState } from "./apply.js";
 import { allNoop, plan, type Action } from "./plan.js";
 
@@ -47,6 +54,40 @@ const renderSecrets = (s: SecretProbe): string[] => {
   } else {
     lines.push(`  ${symbols.fail} ANTHROPIC_API_KEY ${chalk.yellow("— missing; set before merging the setup PR")}`);
   }
+  return lines;
+};
+
+const renderLabels = (l: LabelProbe): string[] => {
+  const lines: string[] = [chalk.bold("Labels")];
+  if (!l.available) {
+    lines.push(`  ${symbols.noop} contract labels ${chalk.dim(`— check skipped (${l.reason})`)}`);
+    return lines;
+  }
+  if (l.missing.length === 0) {
+    lines.push(`  ${symbols.ok} openspec:go / openspec:spec / openspec:impl ${chalk.dim("— all present")}`);
+    return lines;
+  }
+  for (const m of l.missing) {
+    lines.push(`  ${symbols.fail} ${m.name} ${chalk.yellow("— missing")}`);
+  }
+  return lines;
+};
+
+// Print the gh commands rather than running them — init makes no
+// remote writes. A future `--github-labels` flag will execute these.
+const renderLabelCommands = (l: LabelProbe): string[] => {
+  if (!l.available || l.missing.length === 0) return [];
+  const lines = [
+    "",
+    chalk.bold("Create the missing labels"),
+    chalk.dim("  run these (init does not write to the repo):"),
+  ];
+  for (const m of l.missing) {
+    lines.push(
+      `  ${chalk.cyan(`gh label create "${m.name}" --color ${m.color} --description "${m.description}"`)}`,
+    );
+  }
+  lines.push(chalk.dim("  (a future `openspec-flow init --github-labels` will run these for you)"));
   return lines;
 };
 
@@ -102,6 +143,10 @@ export const runInit = (opts: InitOptions): number => {
   renderSecrets(secrets).forEach(log);
   log("");
 
+  const labels = probeLabels(opts.cwd);
+  renderLabels(labels).forEach(log);
+  log("");
+
   const fs = readState(opts.cwd);
   const state = { cwd: opts.cwd, ...fs };
   const actions = plan(state, { force: opts.force });
@@ -112,6 +157,8 @@ export const runInit = (opts: InitOptions): number => {
   if (allNoop(actions)) {
     log("");
     log(`  ${symbols.ok} already initialised — nothing to do.`);
+    renderLabelCommands(labels).forEach(log);
+    log("");
     return 0;
   }
 
@@ -130,6 +177,7 @@ export const runInit = (opts: InitOptions): number => {
   }
 
   renderNextSteps().forEach(log);
+  renderLabelCommands(labels).forEach(log);
   log("");
   return 0;
 };
