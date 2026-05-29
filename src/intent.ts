@@ -8,6 +8,7 @@ export type Intent =
   | { kind: "iterate-spec"; prNumber: number }
   | { kind: "iterate-impl"; prNumber: number }
   | { kind: "create-impl"; specPrNumber: number; issueNumber: number | null }
+  | { kind: "finalize-impl"; prNumber: number }
   | { kind: "noop"; visible: boolean; reason: string };
 
 export const TRIGGER_LABEL = "openspec:go";
@@ -26,6 +27,8 @@ export const describe = (i: Intent): string => {
       return `iterate on implementation PR #${i.prNumber}`;
     case "create-impl":
       return `create implementation for merged spec PR #${i.specPrNumber}`;
+    case "finalize-impl":
+      return `finalize implementation: impl PR #${i.prNumber} merged`;
     case "noop":
       return i.visible ? `Ignored: ${i.reason}.` : `noop — ${i.reason}`;
   }
@@ -150,11 +153,9 @@ export const classify = (eventName: string, payload: unknown): Intent => {
       return { kind: "create-impl", specPrNumber: pr.number, issueNumber };
     }
     if (hasImpl(labels)) {
-      return {
-        kind: "noop",
-        visible: false,
-        reason: "impl PR merged — issue closes via Closes; nothing more to do",
-      };
+      // GitHub closes the issue via `Closes #N`; finalize-impl stamps
+      // the issue's lifecycle breadcrumb with the terminal line.
+      return { kind: "finalize-impl", prNumber: pr.number };
     }
     return { kind: "noop", visible: false, reason: "non-lifecycle PR merged" };
   }

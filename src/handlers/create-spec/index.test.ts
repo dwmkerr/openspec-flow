@@ -210,4 +210,28 @@ describe("handleCreateSpec", () => {
     );
     expect(patchCalls[patchCalls.length - 1][1].body).toContain("api down");
   });
+
+  it("seeds the issue lifecycle breadcrumb at spec-opened", async () => {
+    // Route-aware octokit: GET comments → [] so the upsert posts.
+    const octokit = {
+      issues: { createComment: jest.fn().mockResolvedValue({}), addLabels: jest.fn().mockResolvedValue({}) },
+      request: jest.fn(async (route: string) =>
+        route.startsWith("GET") ? { data: [] } : { data: { id: 1 } },
+      ),
+      pulls: {
+        create: jest.fn().mockResolvedValue({
+          data: { number: 99, html_url: "https://github.com/o/r/pull/99" },
+        }),
+      },
+    };
+    await handleCreateSpec(baseOpts({ octokit }));
+
+    const post = octokit.request.mock.calls.find(
+      (c: any) => c[0].startsWith("POST") && String(c[1].body).includes("openspec-flow:lifecycle"),
+    );
+    expect(post).toBeDefined();
+    expect(post[1].issue_number).toBe(10);
+    expect(post[1].body).toContain("✅ spec PR opened — #99");
+    expect(post[1].body).toContain("▢ spec PR merged");
+  });
 });

@@ -70,7 +70,7 @@ are read by the iterate handlers as context, never as triggers.
 | `pull_request.labeled` with `openspec:go` | PR has `openspec:spec` | `iterate-spec` |
 | `pull_request.labeled` with `openspec:go` | PR has `openspec:impl` | `iterate-impl` |
 | `pull_request.closed` with `merged: true` | PR has `openspec:spec` | `create-impl` |
-| `pull_request.closed` with `merged: true` | PR has `openspec:impl` | `noop` (impl PR includes spec archival; nothing more to do) |
+| `pull_request.closed` with `merged: true` | PR has `openspec:impl` | `finalize-impl` (stamps the issue's lifecycle breadcrumb with the terminal line; the issue is already closed via `Closes #N`) |
 | anything else | — | `noop` |
 
 Noop is either silent (irrelevant event) or visible (trigger looked
