@@ -225,3 +225,47 @@ describe("handleCreateImpl", () => {
     });
   });
 });
+
+describe("handleCreateImpl — issue lifecycle", () => {
+  it("advances the lifecycle to impl-opened on the originating issue", async () => {
+    const octokit = {
+      issues: { createComment: jest.fn().mockResolvedValue({}), addLabels: jest.fn().mockResolvedValue({}) },
+      request: jest.fn(async (route: string) =>
+        route.startsWith("GET") ? { data: [] } : { data: { id: 1 } },
+      ),
+      pulls: {
+        get: jest.fn().mockResolvedValue({
+          data: {
+            body: `Summary.\n\n<!-- openspec-flow:auto-maintained\nissue: 10\nkind: spec\nchange: add-csv-export\n-->`,
+            head: { ref: "chore/10-add-csv-export" },
+            merged: false,
+            state: "open",
+          },
+        }),
+        create: jest.fn().mockResolvedValue({
+          data: { number: 99, html_url: "https://github.com/o/r/pull/99" },
+        }),
+      },
+    };
+    await handleCreateImpl({
+      owner: "o",
+      repo: "r",
+      mode: "sequential" as const,
+      specPrNumber: 12,
+      octokit: octokit as any,
+      gitPushToken: "token",
+      log: { info: jest.fn(), warn: jest.fn() },
+      runner: jest.fn().mockResolvedValue("done"),
+      statusCommentId: 555,
+      statusTargetNumber: 10,
+    } as any);
+
+    const post = octokit.request.mock.calls.find(
+      (c: any) => c[0].startsWith("POST") && String(c[1].body).includes("openspec-flow:lifecycle"),
+    );
+    expect(post).toBeDefined();
+    expect(post[1].issue_number).toBe(10);
+    expect(post[1].body).toContain("✅ spec PR merged");
+    expect(post[1].body).toContain("✅ impl PR opened — #99");
+  });
+});
