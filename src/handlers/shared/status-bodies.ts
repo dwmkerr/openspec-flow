@@ -15,8 +15,11 @@
 const WORKING_GIF_URL =
   "https://raw.githubusercontent.com/dwmkerr/openspec-flow/main/assets/openspec-flow-working.gif";
 
+// HTML <img> (not markdown image) so GitHub honours the width — the
+// raw GIF renders ~300px otherwise, dominating the comment. align=left
+// floats it beside the text rather than stacking on its own line.
 const working = (text: string): string =>
-  `![working](${WORKING_GIF_URL}) ${text}`;
+  `<img src="${WORKING_GIF_URL}" width="56" align="left" alt="working" /> ${text}`;
 
 export const statusReceived = (intentSummary: string): string =>
   working(`openspec-flow received: ${intentSummary}. Starting…`);
