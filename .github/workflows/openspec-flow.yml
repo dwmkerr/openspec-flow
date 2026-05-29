@@ -73,6 +73,13 @@ jobs:
           npm ci
           npm run build
 
+      # Handlers shell out to the Fission `openspec` CLI (new change,
+      # validate, archive). It is a separate binary from openspec-flow
+      # and from the repo's committed openspec-* skills, so the runner
+      # must install it explicitly.
+      - name: Install OpenSpec CLI
+        run: npm i -g @fission-ai/openspec
+
       - name: Dispatch
         run: node dist/cli.js dispatch
         env:
