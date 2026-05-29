@@ -11,7 +11,7 @@ export const assertOpenSpecCli = (): void => {
     execFileSync("openspec", ["--version"], { stdio: "ignore" });
   } catch {
     throw new Error(
-      "openspec CLI not found on PATH. Install with `npm i -g @fishtail-ai/openspec` (see https://openspec.dev).",
+      "openspec CLI not found on PATH. Install with `npm i -g @fission-ai/openspec` (see https://openspec.dev).",
     );
   }
 };
