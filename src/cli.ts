@@ -1,53 +1,20 @@
-// Thin CLI seam. Both Probot (App mode) and the GitHub Action shim
-// invoke the same handler functions; this CLI is how the Action mode
-// and humans reach them.
+// openspec-flow CLI. Commander command tree:
 //
-// Usage:
-//   openspec-flow handle create-spec --issue <n> --repo <owner/repo>
+//   openspec-flow install      scaffold a repo
+//   openspec-flow uninstall    tear it down
+//   openspec-flow dispatch     Action-mode entry (reads $GITHUB_EVENT_*)
+//   openspec-flow handle <intent>   run one handler (CI / dev plumbing)
+//
+// `install`/`uninstall` are the user-facing pair. `dispatch` and
+// `handle` are the runtime plumbing the GitHub Action and dev loop use.
+// Each command carries its own --help; the top level just lists them.
 
+import { Command, CommanderError } from "commander";
 import { execSync } from "node:child_process";
-// Handler imports are lazy: each reads a sibling prompt.md at
-// module-load time, which fails outside the source tree when the
-// CLI is invoked for a non-handle subcommand (eg `init`).
+import { resolve } from "node:path";
 
-interface ParsedArgs {
-  command?: string;
-  intent?: string;
-  flags: Record<string, string>;
-  positional: string[];
-}
-
-// Minimal flag parser. Avoids a dep for a 50-line tool. Supports
-// `--key value` and `--key=value`. Unknown flags pass through.
-const parseArgs = (argv: string[]): ParsedArgs => {
-  const flags: Record<string, string> = {};
-  const positional: string[] = [];
-  for (let i = 0; i < argv.length; i += 1) {
-    const a = argv[i];
-    if (a.startsWith("--")) {
-      const eq = a.indexOf("=");
-      if (eq !== -1) {
-        flags[a.slice(2, eq)] = a.slice(eq + 1);
-      } else {
-        const next = argv[i + 1];
-        if (next && !next.startsWith("--")) {
-          flags[a.slice(2)] = next;
-          i += 1;
-        } else {
-          flags[a.slice(2)] = "true";
-        }
-      }
-    } else {
-      positional.push(a);
-    }
-  }
-  return {
-    command: positional[0],
-    intent: positional[1],
-    flags,
-    positional,
-  };
-};
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const pkg = require("../package.json") as { version: string };
 
 // Pretty stdout logger. Matches the RunAgentLogger surface; uses
 // process.stdout directly so output is unbuffered.
@@ -60,226 +27,214 @@ const stdoutLogger = {
   },
 };
 
-const usage = (): string => `usage:
-  openspec-flow install [--yes] [--force] [--path <dir>]
-    Scaffolds .github/workflows/openspec-flow.yml and a README block.
-    Requires openspec/ already present (run \`openspec init\` first).
-  openspec-flow uninstall [--yes] [--force] [--path <dir>]
-    Removes the workflow + managed README block; prints label-delete commands.
-  openspec-flow handle create-spec   --issue <n>      --repo <owner/repo>
-  openspec-flow handle create-impl   --pr <spec-pr>   --repo <owner/repo>
-  openspec-flow handle iterate-spec  --pr <spec-pr>   --repo <owner/repo>
-  openspec-flow handle iterate-impl  --pr <impl-pr>   --repo <owner/repo>
-  openspec-flow dispatch
-    Action-mode entry. Reads \$GITHUB_EVENT_NAME / \$GITHUB_EVENT_PATH,
-    classifies the event, and routes through the shared dispatch core.
-`;
-
-const requireFlag = (flags: Record<string, string>, name: string): string => {
-  const v = flags[name];
-  if (!v) {
-    throw new Error(`missing required flag --${name}`);
-  }
-  return v;
+const splitRepo = (repo: string): { owner: string; name: string } => {
+  const [owner, name] = repo.split("/");
+  if (!owner || !name) throw new Error(`--repo must be owner/name (got "${repo}")`);
+  return { owner, name };
 };
 
-// Fetch the issue title via `gh issue view` so callers only need to
-// pass the number. Throws if gh isn't authenticated for the repo.
-const fetchIssueTitle = (repo: string, issue: number): string => {
-  const out = execSync(
-    `gh issue view ${issue} -R ${repo} --json title -q .title`,
-    { encoding: "utf8" },
-  );
-  return out.trim();
+const ghToken = (): string => {
+  const token = execSync("gh auth token", { encoding: "utf8" }).trim();
+  if (!token) throw new Error("gh auth token returned empty; run `gh auth login`");
+  return token;
+};
+
+const fetchIssueTitle = (repo: string, issue: number): string =>
+  execSync(`gh issue view ${issue} -R ${repo} --json title -q .title`, {
+    encoding: "utf8",
+  }).trim();
+
+// Action-mode dispatch: read the GitHub event from the runner env,
+// classify with the same classify() the Probot adapter uses, and route
+// through the shared dispatch core.
+const runDispatchCommand = async (): Promise<number> => {
+  const eventName = process.env.GITHUB_EVENT_NAME;
+  const eventPath = process.env.GITHUB_EVENT_PATH;
+  if (!eventName) throw new Error("GITHUB_EVENT_NAME is not set");
+  if (!eventPath) throw new Error("GITHUB_EVENT_PATH is not set");
+
+  const token = process.env.OPENSPEC_FLOW_TOKEN || process.env.GITHUB_TOKEN || "";
+  if (!token) throw new Error("GITHUB_TOKEN is not set");
+
+  const { readFileSync } = await import("node:fs");
+  const payload = JSON.parse(readFileSync(eventPath, "utf8"));
+
+  const { classify } = await import("./intent.js");
+  const intent = classify(eventName, payload);
+
+  if (intent.kind === "noop" && !intent.visible) {
+    stdoutLogger.info(`noop — ${intent.reason} (${eventName})`);
+    return 0;
+  }
+
+  const targetNum = payload?.issue?.number ?? payload?.pull_request?.number ?? null;
+  if (targetNum === null) {
+    stdoutLogger.warn("actionable intent but no issue/PR number on payload");
+    return 0;
+  }
+
+  const owner = payload?.repository?.owner?.login;
+  const name = payload?.repository?.name;
+  if (!owner || !name) throw new Error("payload missing repository owner/name");
+
+  const { Octokit } = await import("@octokit/rest");
+  const octokit = new Octokit({ auth: token });
+  const { runDispatch } = await import("./dispatch.js");
+  await runDispatch(intent, {
+    octokit: octokit as any,
+    owner,
+    repo: name,
+    targetNumber: targetNum,
+    log: stdoutLogger,
+    getToken: async () => token,
+  });
+  return 0;
 };
 
 export const runCli = async (argv: string[]): Promise<number> => {
-  const args = parseArgs(argv);
+  let code = 0;
+  const program = new Command();
 
-  if (args.command === "install") {
-    const { runInstall } = await import("./install/index.js");
-    const cwd = args.flags.path
-      ? require("node:path").resolve(args.flags.path)
-      : process.cwd();
-    return runInstall({
-      cwd,
-      force: args.flags.force === "true",
-      yes: args.flags.yes === "true",
+  program
+    .name("openspec-flow")
+    .description("Drive OpenSpec spec-driven development from GitHub issues.")
+    .version(pkg.version)
+    .exitOverride(); // throw instead of calling process.exit, so runCli owns the code
+
+  program
+    .command("install")
+    .description("Scaffold .github/workflows/openspec-flow.yml + a README block.")
+    .option("--yes", "skip interactive prompts")
+    .option("--force", "overwrite the managed README block when markers are present")
+    .option("--path <dir>", "target directory", ".")
+    .action(async (opts) => {
+      const { runInstall } = await import("./install/index.js");
+      code = runInstall({ cwd: resolve(opts.path), force: !!opts.force, yes: !!opts.yes });
     });
-  }
 
-  if (args.command === "uninstall") {
-    const { runUninstall } = await import("./install/uninstall.js");
-    const cwd = args.flags.path
-      ? require("node:path").resolve(args.flags.path)
-      : process.cwd();
-    return runUninstall({
-      cwd,
-      force: args.flags.force === "true",
-      yes: args.flags.yes === "true",
+  program
+    .command("uninstall")
+    .description("Remove the workflow + managed README block; print label-delete commands.")
+    .option("--yes", "skip interactive prompts")
+    .option("--force", "remove a workflow file that has diverged from the template")
+    .option("--path <dir>", "target directory", ".")
+    .action(async (opts) => {
+      const { runUninstall } = await import("./install/uninstall.js");
+      code = runUninstall({ cwd: resolve(opts.path), force: !!opts.force, yes: !!opts.yes });
     });
-  }
 
-  // Action-mode entry point. Reads the GitHub event from the runner's
-  // $GITHUB_EVENT_* environment, classifies it with the same classify()
-  // the Probot adapter uses, and routes through the shared dispatch core.
-  if (args.command === "dispatch") {
-    const eventName = process.env.GITHUB_EVENT_NAME;
-    const eventPath = process.env.GITHUB_EVENT_PATH;
-    if (!eventName) throw new Error("GITHUB_EVENT_NAME is not set");
-    if (!eventPath) throw new Error("GITHUB_EVENT_PATH is not set");
+  program
+    .command("dispatch")
+    .description("Action-mode entry: classify $GITHUB_EVENT_* and route through the dispatch core.")
+    .action(async () => {
+      code = await runDispatchCommand();
+    });
 
-    const token =
-      process.env.OPENSPEC_FLOW_TOKEN || process.env.GITHUB_TOKEN || "";
-    if (!token) throw new Error("GITHUB_TOKEN is not set");
+  const handle = program
+    .command("handle")
+    .description("Run a single intent handler directly (CI / dev plumbing).");
 
-    const { readFileSync } = await import("node:fs");
-    const payload = JSON.parse(readFileSync(eventPath, "utf8"));
+  handle
+    .command("create-spec")
+    .requiredOption("--issue <n>", "issue number")
+    .requiredOption("--repo <owner/repo>", "target repo")
+    .action(async (opts) => {
+      const { owner, name } = splitRepo(opts.repo);
+      const token = ghToken();
+      const { Octokit } = await import("@octokit/rest");
+      const { handleCreateSpec } = await import("./handlers/create-spec/index.js");
+      const result = await handleCreateSpec({
+        owner,
+        repo: name,
+        issueNumber: Number(opts.issue),
+        issueTitle: fetchIssueTitle(opts.repo, Number(opts.issue)),
+        octokit: new Octokit({ auth: token }) as any,
+        gitPushToken: token,
+        log: stdoutLogger,
+      });
+      if (result) process.stdout.write(`\nspec PR opened: ${result.prUrl}\n`);
+    });
 
-    const { classify } = await import("./intent.js");
-    const intent = classify(eventName, payload);
+  handle
+    .command("create-impl")
+    .requiredOption("--pr <spec-pr>", "merged spec PR number")
+    .requiredOption("--repo <owner/repo>", "target repo")
+    .action(async (opts) => {
+      const { owner, name } = splitRepo(opts.repo);
+      const token = ghToken();
+      const { Octokit } = await import("@octokit/rest");
+      const { handleCreateImpl } = await import("./handlers/create-impl/index.js");
+      const result = await handleCreateImpl({
+        owner,
+        repo: name,
+        mode: "sequential",
+        specPrNumber: Number(opts.pr),
+        octokit: new Octokit({ auth: token }) as any,
+        gitPushToken: token,
+        log: stdoutLogger,
+      });
+      if (result) process.stdout.write(`\nimpl PR opened: ${result.prUrl}\n`);
+    });
 
-    // Silent noop: nothing to do, log one line and exit clean.
-    if (intent.kind === "noop" && !intent.visible) {
-      stdoutLogger.info(`noop — ${intent.reason} (${eventName})`);
-      return 0;
+  handle
+    .command("iterate-spec")
+    .requiredOption("--pr <spec-pr>", "open spec PR number")
+    .requiredOption("--repo <owner/repo>", "target repo")
+    .action(async (opts) => {
+      const { owner, name } = splitRepo(opts.repo);
+      const token = ghToken();
+      const { Octokit } = await import("@octokit/rest");
+      const { handleIterateSpec } = await import("./handlers/iterate-spec/index.js");
+      await handleIterateSpec({
+        owner,
+        repo: name,
+        specPrNumber: Number(opts.pr),
+        octokit: new Octokit({ auth: token }) as any,
+        gitPushToken: token,
+        log: stdoutLogger,
+      });
+    });
+
+  handle
+    .command("iterate-impl")
+    .requiredOption("--pr <impl-pr>", "open impl PR number")
+    .requiredOption("--repo <owner/repo>", "target repo")
+    .action(async (opts) => {
+      const { owner, name } = splitRepo(opts.repo);
+      const token = ghToken();
+      const { Octokit } = await import("@octokit/rest");
+      const { handleIterateImpl } = await import("./handlers/iterate-impl/index.js");
+      await handleIterateImpl({
+        owner,
+        repo: name,
+        implPrNumber: Number(opts.pr),
+        octokit: new Octokit({ auth: token }) as any,
+        gitPushToken: token,
+        log: stdoutLogger,
+      });
+    });
+
+  try {
+    await program.parseAsync(argv, { from: "user" });
+  } catch (err) {
+    if (err instanceof CommanderError) {
+      // Help / version are clean exits; commander already printed.
+      if (
+        err.code === "commander.helpDisplayed" ||
+        err.code === "commander.version" ||
+        err.code === "commander.help"
+      ) {
+        return 0;
+      }
+      return err.exitCode || 1;
     }
-
-    const targetNum =
-      payload?.issue?.number ?? payload?.pull_request?.number ?? null;
-    if (targetNum === null) {
-      stdoutLogger.warn("actionable intent but no issue/PR number on payload");
-      return 0;
-    }
-
-    const repo = payload?.repository;
-    const owner = repo?.owner?.login;
-    const name = repo?.name;
-    if (!owner || !name) throw new Error("payload missing repository owner/name");
-
-    const { Octokit } = await import("@octokit/rest");
-    const octokit = new Octokit({ auth: token });
-
-    const { runDispatch } = await import("./dispatch.js");
-    await runDispatch(intent, {
-      octokit: octokit as any,
-      owner,
-      repo: name,
-      targetNumber: targetNum,
-      log: stdoutLogger,
-      // Action mode: the same token drives clone/push. App-token
-      // minting happens upstream in the workflow and arrives here as
-      // GITHUB_TOKEN/OPENSPEC_FLOW_TOKEN.
-      getToken: async () => token,
-    });
-    return 0;
+    throw err;
   }
-
-  if (args.command !== "handle" || !args.intent) {
-    process.stdout.write(usage());
-    return args.command ? 1 : 0;
-  }
-
-  if (args.intent === "create-spec") {
-    const issue = Number(requireFlag(args.flags, "issue"));
-    const repo = requireFlag(args.flags, "repo");
-    const [owner, name] = repo.split("/");
-    if (!owner || !name) throw new Error(`--repo must be owner/name (got "${repo}")`);
-    const title = fetchIssueTitle(repo, issue);
-    const { Octokit } = await import("@octokit/rest");
-    const { handleCreateSpec } = await import("./handlers/create-spec/index.js");
-    const token = execSync("gh auth token", { encoding: "utf8" }).trim();
-    if (!token) throw new Error("gh auth token returned empty; run `gh auth login`");
-    const octokit = new Octokit({ auth: token });
-    const result = await handleCreateSpec({
-      owner,
-      repo: name,
-      issueNumber: issue,
-      issueTitle: title,
-      octokit: octokit as any,
-      gitPushToken: token,
-      log: stdoutLogger,
-    });
-    if (result) {
-      process.stdout.write(`\nspec PR opened: ${result.prUrl}\n`);
-    }
-    return 0;
-  }
-
-  if (args.intent === "iterate-spec") {
-    const specPr = Number(requireFlag(args.flags, "pr"));
-    const repo = requireFlag(args.flags, "repo");
-    const [owner, name] = repo.split("/");
-    if (!owner || !name) throw new Error(`--repo must be owner/name (got "${repo}")`);
-    const { Octokit } = await import("@octokit/rest");
-    const { handleIterateSpec } = await import("./handlers/iterate-spec/index.js");
-    const token = execSync("gh auth token", { encoding: "utf8" }).trim();
-    if (!token) throw new Error("gh auth token returned empty; run `gh auth login`");
-    const octokit = new Octokit({ auth: token });
-    await handleIterateSpec({
-      owner,
-      repo: name,
-      specPrNumber: specPr,
-      octokit: octokit as any,
-      gitPushToken: token,
-      log: stdoutLogger,
-    });
-    return 0;
-  }
-
-  if (args.intent === "iterate-impl") {
-    const implPr = Number(requireFlag(args.flags, "pr"));
-    const repo = requireFlag(args.flags, "repo");
-    const [owner, name] = repo.split("/");
-    if (!owner || !name) throw new Error(`--repo must be owner/name (got "${repo}")`);
-    const { Octokit } = await import("@octokit/rest");
-    const { handleIterateImpl } = await import("./handlers/iterate-impl/index.js");
-    const token = execSync("gh auth token", { encoding: "utf8" }).trim();
-    if (!token) throw new Error("gh auth token returned empty; run `gh auth login`");
-    const octokit = new Octokit({ auth: token });
-    await handleIterateImpl({
-      owner,
-      repo: name,
-      implPrNumber: implPr,
-      octokit: octokit as any,
-      gitPushToken: token,
-      log: stdoutLogger,
-    });
-    return 0;
-  }
-
-  if (args.intent === "create-impl") {
-    const specPr = Number(requireFlag(args.flags, "pr"));
-    const repo = requireFlag(args.flags, "repo");
-    const [owner, name] = repo.split("/");
-    if (!owner || !name) throw new Error(`--repo must be owner/name (got "${repo}")`);
-    const { Octokit } = await import("@octokit/rest");
-    const { handleCreateImpl } = await import("./handlers/create-impl/index.js");
-    const token = execSync("gh auth token", { encoding: "utf8" }).trim();
-    if (!token) throw new Error("gh auth token returned empty; run `gh auth login`");
-    const octokit = new Octokit({ auth: token });
-    const result = await handleCreateImpl({
-      owner,
-      repo: name,
-      mode: "sequential",
-      specPrNumber: specPr,
-      octokit: octokit as any,
-      gitPushToken: token,
-      log: stdoutLogger,
-    });
-    if (result) {
-      process.stdout.write(`\nimpl PR opened: ${result.prUrl}\n`);
-    }
-    return 0;
-  }
-
-  process.stderr.write(`unknown intent: ${args.intent}\n${usage()}`);
-  return 1;
+  return code;
 };
 
-// When this file is the process entry (`tsx src/cli.ts ...` or
-// `node dist/cli.js ...`), run the CLI directly. The bin shim also
-// works by importing the compiled module and calling `runCli`.
+// Direct entry: `tsx src/cli.ts ...` or `node dist/cli.js ...`. The bin
+// shim also imports the compiled module and calls runCli.
 if (require.main === module) {
   runCli(process.argv.slice(2))
     .then((code) => process.exit(code))
