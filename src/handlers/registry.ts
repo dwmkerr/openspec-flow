@@ -12,6 +12,7 @@ import { handleCreateSpec } from "./create-spec/index.js";
 import { handleCreateImpl } from "./create-impl/index.js";
 import { handleIterateSpec } from "./iterate-spec/index.js";
 import { handleIterateImpl } from "./iterate-impl/index.js";
+import { handleFinalizeImpl } from "./finalize-impl/index.js";
 import type { RunAgentLogger } from "../agent/run.js";
 import type { MinimalOctokit } from "./create-impl/index.js";
 
@@ -56,6 +57,12 @@ export const HANDLERS: { [K in IntentKind]: Handler<K> | null } = {
 
   "iterate-impl": (i, c) =>
     handleIterateImpl({
+      ...c,
+      implPrNumber: i.prNumber,
+    }),
+
+  "finalize-impl": (i, c) =>
+    handleFinalizeImpl({
       ...c,
       implPrNumber: i.prNumber,
     }),

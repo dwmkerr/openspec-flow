@@ -27,6 +27,7 @@ import {
 import { summariseProposal } from "../create-spec/changes.js";
 import { parseSpecPrMetadata } from "../shared/spec-pr-metadata.js";
 import { updateStatusComment } from "../shared/status-comment.js";
+import { upsertLifecycleComment } from "../shared/lifecycle-comment.js";
 import {
   statusImplementing,
   statusPushing,
@@ -245,6 +246,20 @@ export const handleCreateImpl = async (
     });
 
     await setStatus(statusImplPrOpened(pr.data.number));
+
+    // Advance the issue lifecycle breadcrumb on the originating issue
+    // (spec merged + impl opened). Best-effort. resolvedIssue comes
+    // from the spec-PR metadata when not passed directly.
+    if (resolvedIssue !== undefined) {
+      await upsertLifecycleComment(
+        opts.octokit as any,
+        opts.owner,
+        opts.repo,
+        resolvedIssue,
+        { phase: "impl-opened", specPr: opts.specPrNumber, implPr: pr.data.number },
+        { warn: opts.log.warn },
+      );
+    }
 
     opts.log.info(`create-impl: done — ${pr.data.html_url}`);
     return { prNumber: pr.data.number, prUrl: pr.data.html_url };
