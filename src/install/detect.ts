@@ -66,6 +66,21 @@ export const detect = (cwd: string): Detections => ({
 export const openspecPresent = (d: Detections): boolean =>
   d.openspecDir || d.openspecBin || d.skillDirs.length > 0;
 
+// Resolve `owner/repo` of the cwd's GitHub remote (or null). Used by
+// install to embed a workflow-status badge in the README. Best-effort
+// — null when no origin, non-GitHub, or git absent.
+export const resolveRemote = (cwd: string): string | null => {
+  try {
+    const url = execSync("git remote get-url origin", {
+      cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    const m = url.match(/github\.com[/:]([^/]+\/[^/]+?)(?:\.git)?$/);
+    return m ? m[1] : null;
+  } catch {
+    return null;
+  }
+};
+
 export type SecretState = "present" | "absent" | "unknown";
 
 export interface SecretProbe {

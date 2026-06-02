@@ -9,7 +9,13 @@ import chalk from "chalk";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { CONTRACT_LABELS } from "./detect.js";
-import { renderWorkflow, README_MARKER_START, README_MARKER_END } from "./templates.js";
+import {
+  renderWorkflow,
+  README_MARKER_START,
+  README_MARKER_END,
+  BADGE_MARKER_START,
+  BADGE_MARKER_END,
+} from "./templates.js";
 
 export interface UninstallOptions {
   cwd: string;
@@ -27,16 +33,30 @@ const symbols = {
 const WORKFLOW_REL = ".github/workflows/openspec-flow.yml";
 const README_REL = "README.md";
 
-// Strip the managed block (markers inclusive) plus one trailing blank
-// line, leaving everything else byte-identical.
-const stripBlock = (readme: string): string | null => {
-  const s = readme.indexOf(README_MARKER_START);
-  const e = readme.indexOf(README_MARKER_END);
+// Strip one marker-bracketed block (markers inclusive) plus collapse
+// surrounding blank lines. Returns null when the start/end markers
+// aren't both present.
+const stripOne = (readme: string, start: string, end: string): string | null => {
+  const s = readme.indexOf(start);
+  const e = readme.indexOf(end);
   if (s === -1 || e === -1 || e < s) return null;
-  const end = e + README_MARKER_END.length;
+  const tail = e + end.length;
   const before = readme.slice(0, s).replace(/\n+$/, "\n");
-  const after = readme.slice(end).replace(/^\n+/, "");
+  const after = readme.slice(tail).replace(/^\n+/, "");
   return (before + after).replace(/\n{3,}/g, "\n\n");
+};
+
+// Strip both managed blocks (badge + main). Returns null if neither
+// is present; otherwise returns the stripped content.
+const stripBlock = (readme: string): string | null => {
+  let next: string | null = null;
+  const afterBadge = stripOne(readme, BADGE_MARKER_START, BADGE_MARKER_END);
+  if (afterBadge !== null) {
+    next = afterBadge;
+  }
+  const afterMain = stripOne(next ?? readme, README_MARKER_START, README_MARKER_END);
+  if (afterMain !== null) next = afterMain;
+  return next;
 };
 
 export const runUninstall = (opts: UninstallOptions): number => {

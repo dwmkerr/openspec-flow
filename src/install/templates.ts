@@ -42,6 +42,20 @@ export const renderWorkflow = (ref: string = DEFAULT_REF): string => {
   return base.replace(REF_LINE, `$1${ref}`);
 };
 
+// Badge block — placed near the top of the README (right under the
+// H1) so it sits with the project's title-area badges. Its own marker
+// pair lets the user remove it cleanly: leave the empty marker pair to
+// keep it gone (install respects existing markers and won't re-add).
+export const BADGE_MARKER_START = "<!-- openspec-flow badge-start -->";
+export const BADGE_MARKER_END = "<!-- openspec-flow badge-end -->";
+
+// `remote` is the target repo's `owner/name`. Returns null when no
+// remote (caller skips the badge altogether).
+export const renderBadgeBlock = (remote: string): string => {
+  const base = `https://github.com/${remote}/actions/workflows/openspec-flow.yml`;
+  return `${BADGE_MARKER_START}\n[![openspec-flow](${base}/badge.svg)](${base})\n${BADGE_MARKER_END}`;
+};
+
 export const renderReadmeBlock = (): string => `${README_MARKER_START}
 ## openspec-flow
 
@@ -55,7 +69,7 @@ This repo uses [openspec-flow](https://github.com/dwmkerr/openspec-flow) to driv
 Required Actions secret: \`ANTHROPIC_API_KEY\`.
 ${README_MARKER_END}`;
 
-export const renderMinimalReadme = (repoName: string): string => `# ${repoName}
-
-${renderReadmeBlock()}
-`;
+export const renderMinimalReadme = (repoName: string, remote?: string | null): string => {
+  const badge = remote ? `\n${renderBadgeBlock(remote)}\n` : "";
+  return `# ${repoName}\n${badge}\n${renderReadmeBlock()}\n`;
+};
