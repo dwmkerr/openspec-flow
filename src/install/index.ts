@@ -73,6 +73,20 @@ const renderLabels = (l: LabelProbe): string[] => {
   return lines;
 };
 
+// Print the gh command to set the required secret. Mirrors the
+// label-commands pattern — install makes no remote writes; the user
+// runs the command themselves. Omitted when the secret is already
+// present.
+const renderSecretCommands = (s: SecretProbe): string[] => {
+  if (s.available && s.anthropic === "present") return [];
+  return [
+    "",
+    chalk.bold("Set the required secret"),
+    chalk.dim("  run this (install does not write to the repo):"),
+    `  ${chalk.cyan(`gh secret set ANTHROPIC_API_KEY`)}  ${chalk.dim("# Setup Anthropic key")}`,
+  ];
+};
+
 // Print the gh commands rather than running them — init makes no
 // remote writes. A future `--github-labels` flag will execute these.
 const renderLabelCommands = (l: LabelProbe): string[] => {
@@ -107,9 +121,10 @@ const renderNextSteps = (): string[] => [
   "",
   chalk.bold("Next steps"),
   `  1. ${chalk.dim("review the diff:")} ${chalk.cyan("git diff")}`,
-  `  2. ${chalk.dim("ensure")} ${chalk.cyan("ANTHROPIC_API_KEY")} ${chalk.dim("is set on the repo (Settings → Secrets)")}`,
-  `  3. ${chalk.dim("commit on a feature branch and open a PR titled:")} ${chalk.cyan("chore: openspec-flow setup")}`,
-  `  4. ${chalk.dim("after merge, open an issue and add the")} ${chalk.cyan("openspec:go")} ${chalk.dim("label.")}`,
+  `  2. ${chalk.dim("commit on a feature branch and open a PR titled:")} ${chalk.cyan("chore: openspec-flow setup")}`,
+  `  3. ${chalk.dim("after merge, open an issue and add the")} ${chalk.cyan("openspec:go")} ${chalk.dim("label.")}`,
+  "",
+  chalk.dim("  (the gh commands above set up the secret + labels — run them once.)"),
 ];
 
 export const runInstall = (opts: InstallOptions): number => {
@@ -157,6 +172,7 @@ export const runInstall = (opts: InstallOptions): number => {
   if (allNoop(actions)) {
     log("");
     log(`  ${symbols.ok} already initialised — nothing to do.`);
+    renderSecretCommands(secrets).forEach(log);
     renderLabelCommands(labels).forEach(log);
     log("");
     return 0;
@@ -176,8 +192,9 @@ export const runInstall = (opts: InstallOptions): number => {
     log(`  ${symbols.ok} wrote ${action.path}`);
   }
 
-  renderNextSteps().forEach(log);
+  renderSecretCommands(secrets).forEach(log);
   renderLabelCommands(labels).forEach(log);
+  renderNextSteps().forEach(log);
   log("");
   return 0;
 };
