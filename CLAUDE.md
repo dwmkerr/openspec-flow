@@ -141,11 +141,35 @@ The slug is a kebab-case rendering of the issue title. The impl prefix is
 
 | Mode | What user does | Where agent runs |
 |---|---|---|
-| Action (local install) | Drops a reusable-workflow shim into `.github/workflows/openspec-flow.yml` | GitHub Actions runner |
-| App (org install) | Installs the openspec-flow GitHub App on the org or repo | Probot service (Fly.io) |
+| Action (local install) | `openspec-flow install` drops a reusable-workflow shim at `.github/workflows/openspec-flow.yml` | GitHub Actions runner |
+| App (org install) | Installs the openspec-flow GitHub App on the org or repo | Probot service (currently local dev tunnel — hosting TBD pending credential-distribution RFC) |
 
-Both modes implement the same flow above. They are functionally equivalent
-from the user's perspective.
+Both modes route through the same `runDispatch` core in `src/dispatch.ts`:
+
+- **App mode** — `src/index.ts` is a thin Probot adapter that builds `DispatchDeps` from the webhook `Context` and calls `runDispatch`.
+- **Action mode** — the shim's `uses:` calls the reusable workflow `.github/workflows/openspec-flow.yml@<ref>` (which is `workflow_call`-only). That workflow checks out openspec-flow at `github.job_workflow_sha` (keeps shim ref + runtime code in lockstep), installs the Fission `openspec` CLI globally (`npm i -g @fission-ai/openspec`), builds, then runs `node dist/cli.js dispatch`. `dispatch` reads `$GITHUB_EVENT_NAME` + `$GITHUB_EVENT_PATH`, classifies with the same `classify()`, and calls the same `runDispatch`. Identity = App token when `OPENSPEC_FLOW_APP_ID`/`PRIVATE_KEY` secrets are present, else `GITHUB_TOKEN` (`github-actions[bot]`).
+
+## CLI surface
+
+```
+openspec-flow install      # scaffold workflow + README block (+ badge under H1)
+openspec-flow uninstall    # remove the workflow + both managed README regions
+openspec-flow dispatch     # Action-mode entry; reads $GITHUB_EVENT_*
+openspec-flow handle <intent>   # CI/dev plumbing: create-spec | create-impl | iterate-spec | iterate-impl
+```
+
+`install` writes two marker-gated regions in the target repo's `README.md`:
+`<!-- openspec-flow badge-start/end -->` (under the H1) and
+`<!-- openspec-flow install-start/end -->` (appended). Each follows the
+three-state rule: no markers → insert; markers present → leave alone;
+`--force` → overwrite between markers.
+
+## Build + runtime gotchas
+
+- **`tsc` does not copy `.md` assets.** Handlers read sibling `prompt.md` at module load. `npm run build` runs `scripts/copy-assets.mjs` to copy `src/**/*.md` to `dist/`. Don't add a new sibling asset without verifying it lands in `dist/`.
+- **Run `openspec` from repo root**, not from inside a change directory — the CLI resolves the `openspec/` tree from cwd.
+- **The reusable workflow is `workflow_call`-only** (no `issues`/`pull_request` direct triggers). The shim carries the event triggers. This prevents openspec-flow's own repo from self-triggering the runtime.
+- **Avoid local `describe`/`it`/`expect`/`test` identifiers in `src/`** — Jest types are globally declared and shadow imported helpers with confusing "Expected 2 arguments, got 1" errors.
 
 ## Chained mode (opt-in)
 
