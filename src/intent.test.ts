@@ -121,13 +121,13 @@ describe("classify — silent noops", () => {
     if (intent.kind === "noop") expect(intent.visible).toBe(false);
   });
 
-  it("impl PR merged → silent noop (no action needed)", () => {
+  it("impl PR merged → finalize-impl (stamp issue lifecycle)", () => {
     const intent = classify(
       "pull_request",
       prClosed({ merged: true, labels: ["openspec:impl"] }),
     );
-    expect(intent.kind).toBe("noop");
-    if (intent.kind === "noop") expect(intent.visible).toBe(false);
+    expect(intent.kind).toBe("finalize-impl");
+    if (intent.kind === "finalize-impl") expect(intent.prNumber).toBeGreaterThan(0);
   });
 
   it("unsupported event → silent noop", () => {
