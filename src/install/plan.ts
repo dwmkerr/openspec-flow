@@ -5,12 +5,16 @@
 
 import * as path from "node:path";
 import {
+  BADGE_MARKER_END,
+  BADGE_MARKER_START,
   README_MARKER_END,
   README_MARKER_START,
+  renderBadgeBlock,
   renderMinimalReadme,
   renderReadmeBlock,
   renderWorkflow,
 } from "./templates.js";
+import { resolveRemote } from "./detect.js";
 
 export interface FsState {
   cwd: string;
@@ -61,51 +65,90 @@ const replaceBetween = (haystack: string, start: string, end: string, replacemen
   return haystack.slice(0, s) + replacement + haystack.slice(e + end.length);
 };
 
+// Insert the badge block right under the first H1 line when no badge
+// markers exist. If markers exist, leave alone (--force overwrites)
+// — same three-state model as the main block, so deleting the markers
+// keeps the badge gone until the user re-runs `install --force`.
+const insertBadgeUnderTitle = (
+  content: string,
+  remote: string | null,
+  force: boolean,
+): string => {
+  if (!remote) return content;
+  const block = renderBadgeBlock(remote);
+  const hasMarkers = content.includes(BADGE_MARKER_START) && content.includes(BADGE_MARKER_END);
+  if (hasMarkers) {
+    if (!force) return content;
+    return replaceBetween(content, BADGE_MARKER_START, BADGE_MARKER_END, block);
+  }
+  const h1 = content.match(/^# .+$/m);
+  if (h1 && h1.index !== undefined) {
+    const cut = h1.index + h1[0].length;
+    return content.slice(0, cut) + "\n\n" + block + content.slice(cut);
+  }
+  // No H1 → prepend.
+  return block + "\n\n" + content;
+};
+
 const planReadme = (state: FsState, opts: PlanOptions): Action => {
   const abs = path.join(state.cwd, README_REL);
   const repoName = path.basename(state.cwd);
+  const remote = resolveRemote(state.cwd);
   const block = renderReadmeBlock();
 
-  // Three-state model: README absent → create. Marker present →
-  // leave alone (user owns it once injected; we don't second-guess).
-  // --force → overwrite content between markers, or re-append if
-  // the user has deleted them.
+  // Three-state model (per marker pair): README absent → create.
+  // Markers present → leave alone. --force → overwrite between markers.
+  // Badge block follows the same rules but lives under the H1; main
+  // managed block follows existing append-at-end behaviour.
   if (state.readme === null) {
     return {
       kind: "write",
       path: abs,
-      content: renderMinimalReadme(repoName),
+      content: renderMinimalReadme(repoName, remote),
       reason: "creating README with managed block",
     };
   }
 
-  const hasMarkers =
+  const hasMain =
     state.readme.includes(README_MARKER_START) && state.readme.includes(README_MARKER_END);
 
-  if (hasMarkers && !opts.force) {
-    return {
-      kind: "noop",
-      path: abs,
-      content: state.readme,
-      reason: "managed block present — leaving alone (--force to overwrite)",
-    };
-  }
+  // Compose the next README content step by step so a single write
+  // covers badge + main-block decisions.
+  let next = insertBadgeUnderTitle(state.readme, remote, opts.force);
 
-  if (hasMarkers && opts.force) {
+  if (hasMain && !opts.force) {
+    if (next === state.readme) {
+      return {
+        kind: "noop",
+        path: abs,
+        content: state.readme,
+        reason: "managed blocks present — leaving alone (--force to overwrite)",
+      };
+    }
     return {
       kind: "patch-readme",
       path: abs,
-      content: replaceBetween(state.readme, README_MARKER_START, README_MARKER_END, block),
-      reason: "force: overwriting managed block",
+      content: next,
+      reason: "adding badge under title",
     };
   }
 
-  // No markers. First run on an existing README → append.
-  const separator = state.readme.endsWith("\n") ? "\n" : "\n\n";
+  if (hasMain && opts.force) {
+    next = replaceBetween(next, README_MARKER_START, README_MARKER_END, block);
+    return {
+      kind: "patch-readme",
+      path: abs,
+      content: next,
+      reason: "force: overwriting managed blocks",
+    };
+  }
+
+  // No main marker → append the main block at end.
+  const separator = next.endsWith("\n") ? "\n" : "\n\n";
   return {
     kind: "patch-readme",
     path: abs,
-    content: state.readme + separator + block + "\n",
+    content: next + separator + block + "\n",
     reason: "appending managed block",
   };
 };
