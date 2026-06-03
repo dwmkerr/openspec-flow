@@ -65,6 +65,25 @@ const replaceBetween = (haystack: string, start: string, end: string, replacemen
   return haystack.slice(0, s) + replacement + haystack.slice(e + end.length);
 };
 
+// Find the first markdown H1 (`# Title`) that sits OUTSIDE a fenced
+// code block. Naive regex match would pick `# Clone…` inside a
+// ```bash fence as the title and inject the badge there — a real bug
+// observed in the wild. Returns the byte offset right after the H1
+// line so the caller can splice in content. Returns null when no
+// H1-outside-fence exists (caller prepends).
+const findFirstH1End = (content: string): number | null => {
+  let inFence = false;
+  let pos = 0;
+  for (const rawLine of content.split("\n")) {
+    if (rawLine.startsWith("```")) inFence = !inFence;
+    else if (!inFence && /^# .+$/.test(rawLine)) {
+      return pos + rawLine.length;
+    }
+    pos += rawLine.length + 1; // +1 for the \n we split on
+  }
+  return null;
+};
+
 // Insert the badge block right under the first H1 line when no badge
 // markers exist. If markers exist, leave alone (--force overwrites)
 // — same three-state model as the main block, so deleting the markers
@@ -81,12 +100,12 @@ const insertBadgeUnderTitle = (
     if (!force) return content;
     return replaceBetween(content, BADGE_MARKER_START, BADGE_MARKER_END, block);
   }
-  const h1 = content.match(/^# .+$/m);
-  if (h1 && h1.index !== undefined) {
-    const cut = h1.index + h1[0].length;
+  const cut = findFirstH1End(content);
+  if (cut !== null) {
     return content.slice(0, cut) + "\n\n" + block + content.slice(cut);
   }
-  // No H1 → prepend.
+  // No markdown H1 outside code fences → prepend (README likely uses
+  // HTML for the title block, e.g. `<p align="center">…</p>`).
   return block + "\n\n" + content;
 };
 
