@@ -12,6 +12,12 @@
 import { Command, CommanderError } from "commander";
 import { execSync } from "node:child_process";
 import { resolve } from "node:path";
+// Load .env at module-load so `--as-app` (and any future env-driven
+// flags) pick up OPENSPEC_FLOW_APP_ID / PRIVATE_KEY_PATH without the
+// operator having to source it manually. Probot loads it automatically;
+// the CLI didn't until now.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+require("dotenv").config();
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const pkg = require("../package.json") as { version: string };
@@ -37,6 +43,66 @@ const ghToken = (): string => {
   const token = execSync("gh auth token", { encoding: "utf8" }).trim();
   if (!token) throw new Error("gh auth token returned empty; run `gh auth login`");
   return token;
+};
+
+// Resolve a GitHub token for `app-init`. Order: --token flag, env
+// GITHUB_TOKEN, `gh auth token`. Throw with a named missing-credential
+// when nothing works so the CLI exits non-zero with a clear message.
+const resolveAppInitToken = (flag?: string): string => {
+  if (flag) return flag;
+  if (process.env.GITHUB_TOKEN) return process.env.GITHUB_TOKEN;
+  try {
+    return ghToken();
+  } catch {
+    throw new Error(
+      "no GitHub token: pass --token, set GITHUB_TOKEN, or run `gh auth login`",
+    );
+  }
+};
+
+// Mint an installation token so the PR is authored by the App
+// (`<slug>[bot]`) rather than the operator's user. Requires the App's
+// id + private key in env and the App to be already installed on the
+// target repo. A 404 from `apps.getRepoInstallation` is surfaced with
+// the install URL — the most common failure mode is forgetting the
+// install step.
+const mintInstallationToken = async (
+  owner: string,
+  name: string,
+): Promise<string> => {
+  const appId = process.env.OPENSPEC_FLOW_APP_ID || process.env.APP_ID;
+  const privateKeyPath =
+    process.env.OPENSPEC_FLOW_PRIVATE_KEY_PATH || process.env.PRIVATE_KEY_PATH;
+  if (!appId) {
+    throw new Error("--as-app requires OPENSPEC_FLOW_APP_ID (or APP_ID) in env");
+  }
+  if (!privateKeyPath) {
+    throw new Error(
+      "--as-app requires OPENSPEC_FLOW_PRIVATE_KEY_PATH (or PRIVATE_KEY_PATH) in env",
+    );
+  }
+  const { readFileSync } = await import("node:fs");
+  const privateKey = readFileSync(privateKeyPath, "utf8");
+  const { createAppAuth } = await import("@octokit/auth-app");
+  const { Octokit } = await import("@octokit/rest");
+  const appAuth = createAppAuth({ appId, privateKey });
+  const appOctokit = new Octokit({ authStrategy: undefined, auth: (await appAuth({ type: "app" })).token });
+  let installationId: number;
+  try {
+    const res = await appOctokit.apps.getRepoInstallation({ owner, repo: name });
+    installationId = res.data.id;
+  } catch (err: any) {
+    if (err?.status === 404) {
+      throw new Error(
+        `--as-app: GitHub App (id ${appId}) is not installed on ` +
+          `${owner}/${name}. Install it on the repo, then re-run.\n` +
+          `  Find install URL: https://github.com/settings/installations`,
+      );
+    }
+    throw err;
+  }
+  const installAuth = await appAuth({ type: "installation", installationId });
+  return (installAuth as { token: string }).token;
 };
 
 const fetchIssueTitle = (repo: string, issue: number): string =>
@@ -121,6 +187,64 @@ export const runCli = async (argv: string[]): Promise<number> => {
     .action(async (opts) => {
       const { runUninstall } = await import("./install/uninstall.js");
       code = runUninstall({ cwd: resolve(opts.path), force: !!opts.force, yes: !!opts.yes });
+    });
+
+  program
+    .command("app-init")
+    .description(
+      "Preview or open the App-install setup PR against a remote repo " +
+        "(same core the App's installation.created handler runs).",
+    )
+    .requiredOption("--repo <owner/name>", "target repository")
+    .option("--dry-run", "compute the plan without writing", false)
+    .option("--token <value>", "GitHub token; falls back to GITHUB_TOKEN, then `gh auth token`")
+    .option("--as-app", "mint a GitHub App installation token so the PR is authored by <slug>[bot] (needs OPENSPEC_FLOW_APP_ID + OPENSPEC_FLOW_PRIVATE_KEY_PATH; App must already be installed on the target repo)")
+    .action(async (opts) => {
+      const { owner, name } = splitRepo(opts.repo);
+      const token = opts.asApp
+        ? await mintInstallationToken(owner, name)
+        : resolveAppInitToken(opts.token);
+      const { Octokit } = await import("@octokit/rest");
+      const octokit = new Octokit({ auth: token });
+
+      // Surface which identity will author the PR before we do
+      // anything. Bot identity only happens via --as-app + an installed
+      // App; without it we use the operator's user, which is fine for
+      // dev but worth calling out so the operator isn't surprised when
+      // the PR shows their name.
+      if (opts.asApp) {
+        stdoutLogger.info(`identity: GitHub App installation token (PR will be authored by <slug>[bot])`);
+      } else {
+        try {
+          const me = await octokit.request("GET /user");
+          stdoutLogger.info(
+            `identity: ${me.data.login} (personal token — PR will be authored by you, not the App bot)`,
+          );
+          stdoutLogger.info(
+            `  → for App-identity testing pass --as-app (needs OPENSPEC_FLOW_APP_ID + private key + App installed on repo)`,
+          );
+        } catch {
+          // Identity probe is informational — never block on it.
+        }
+      }
+
+      const { runAppInit } = await import("./app-install/index.js");
+      const result = await runAppInit(
+        { octokit: octokit as any, log: stdoutLogger },
+        { owner, name },
+        { dryRun: !!opts.dryRun },
+      );
+      if (result.skipped) {
+        stdoutLogger.info(`skipped: ${result.skipped}`);
+      } else if (result.prUrl) {
+        stdoutLogger.info(`opened: ${result.prUrl}`);
+      } else {
+        stdoutLogger.info(`plan: branch=${result.branch} title="${result.prTitle}"`);
+        for (const f of result.files) {
+          stdoutLogger.info(`  + ${f.path} (${f.contentLength} bytes)`);
+        }
+      }
+      code = 0;
     });
 
   program

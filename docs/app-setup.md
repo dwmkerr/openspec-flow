@@ -37,14 +37,16 @@ Open: <https://github.com/settings/apps/new> again.
 
 Scroll down to **Repository permissions** and set:
 
-| Permission | Access |
-|---|---|
-| Contents | Read & write |
-| Issues | Read & write |
-| Pull requests | Read & write |
-| Workflows | Read & write |
-| Actions | Read |
-| Checks | Read |
+| Permission | Access | Why |
+|---|---|---|
+| Contents | Read & write | commit + push to spec/impl branches |
+| Issues | Read & write | label, comment, close |
+| Pull requests | Read & write | open, comment, merge tracking |
+| Workflows | Read & write | **required for the install-time init PR** — the commit includes `.github/workflows/openspec-flow.yml`, which GitHub gates behind a separate `workflows` scope. Without it, every init-PR commit fails with a 404 on `POST /git/trees` |
+| Actions | Read | workflow-run telemetry |
+| Checks | Read | check-suite events |
+
+> If you registered the App before `Workflows: Read & write` was required and you're seeing 404s on init, edit the App's permissions then re-consent on each installation (GitHub shows a banner: "openspec-flow needs your review"). Installation tokens issued before the upgrade do not carry the new scope.
 
 Scroll to **Subscribe to events** and check:
 
@@ -82,6 +84,14 @@ Still on the App settings page:
 2. Click **Install** next to your account
 3. Pick **Only select repositories** → choose `dwmkerr/openspec-flow` (or whichever repo you want to test against)
 4. Click **Install**
+
+On install, the App opens a setup PR in each selected repo (branch `chore/openspec-flow-init`, title `chore: openspec-flow setup`) containing the shim workflow + README managed regions. The PR body documents the `gh secret set ANTHROPIC_API_KEY` step you need to run before merging. Re-installing on a repo that already has both the workflow file and README markers is a no-op (logged as `skipped: already-initialised`).
+
+To preview what that PR would contain against any remote repo without running the App, use the CLI:
+
+```bash
+npx tsx src/cli.ts app-init --repo <owner/sandbox> --dry-run
+```
 
 ## Step 4 — fill `.env`
 

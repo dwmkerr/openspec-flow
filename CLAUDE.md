@@ -142,11 +142,11 @@ The slug is a kebab-case rendering of the issue title. The impl prefix is
 | Mode | What user does | Where agent runs |
 |---|---|---|
 | Action (local install) | `openspec-flow install` drops a reusable-workflow shim at `.github/workflows/openspec-flow.yml` | GitHub Actions runner |
-| App (org install) | Installs the openspec-flow GitHub App on the org or repo | Probot service (currently local dev tunnel — hosting TBD pending credential-distribution RFC) |
+| App (org install) | Installs the openspec-flow GitHub App on the org or repo. On install, the App auto-opens a per-repo init PR (branch `chore/openspec-flow-init`) that scaffolds the same shim workflow + README managed regions `openspec-flow install` would. | GitHub Actions runner (the App is bootstrap + identity; event handling runs in the user's runner via the shim) |
 
-Both modes route through the same `runDispatch` core in `src/dispatch.ts`:
+Both modes share the `runDispatch` core in `src/dispatch.ts`:
 
-- **App mode** — `src/index.ts` is a thin Probot adapter that builds `DispatchDeps` from the webhook `Context` and calls `runDispatch`.
+- **App mode** — `src/index.ts` is a thin Probot adapter. In production it handles `installation.created` only (opens the init PR via the shared `runAppInit` core in `src/app-install/`). Issue/PR event dispatch is **dev-only**, gated behind `OPENSPEC_FLOW_DISPATCH_MODE=in-process`; in `action` mode (the default) the App no-ops those events so the shim in the user's repo is the sole dispatcher and double-fire is impossible. The flag does not gate `installation.created` — only Probot can see it. Probot logs `dispatch-mode=<value>` on boot.
 - **Action mode** — the shim's `uses:` calls the reusable workflow `.github/workflows/openspec-flow.yml@<ref>` (which is `workflow_call`-only). That workflow checks out openspec-flow at `github.job_workflow_sha` (keeps shim ref + runtime code in lockstep), installs the Fission `openspec` CLI globally (`npm i -g @fission-ai/openspec`), builds, then runs `node dist/cli.js dispatch`. `dispatch` reads `$GITHUB_EVENT_NAME` + `$GITHUB_EVENT_PATH`, classifies with the same `classify()`, and calls the same `runDispatch`. Identity = App token when `OPENSPEC_FLOW_APP_ID`/`PRIVATE_KEY` secrets are present, else `GITHUB_TOKEN` (`github-actions[bot]`).
 
 ## CLI surface
@@ -154,9 +154,12 @@ Both modes route through the same `runDispatch` core in `src/dispatch.ts`:
 ```
 openspec-flow install      # scaffold workflow + README block (+ badge under H1)
 openspec-flow uninstall    # remove the workflow + both managed README regions
+openspec-flow app-init     # open the App-install setup PR on a remote repo (--repo, --dry-run, --token); live by default, --dry-run to preview
 openspec-flow dispatch     # Action-mode entry; reads $GITHUB_EVENT_*
 openspec-flow handle <intent>   # CI/dev plumbing: create-spec | create-impl | iterate-spec | iterate-impl
 ```
+
+`app-init` shares the `runAppInit` core with the App's `installation.created` handler. Default behaviour opens the PR for real, matching `install`'s act-by-default semantics; pass `--dry-run` to print the plan without writing. Useful for driving the same code path locally without running Probot, or previewing the diff against a sandbox repo first.
 
 `install` writes two marker-gated regions in the target repo's `README.md`:
 `<!-- openspec-flow badge-start/end -->` (under the H1) and

@@ -97,6 +97,38 @@ npm run dev
 
 This runs `tsx watch src/index.ts`. Edit any file under `src/`, save, and the process restarts in ~1s with the new code. Probot logs every received webhook to stdout.
 
+#### Dispatch mode
+
+The Probot adapter only dispatches issue/PR events in-proc when `OPENSPEC_FLOW_DISPATCH_MODE=in-process`. Without it, those handlers no-op so the shim workflow in the user's repo is the sole dispatcher — that's the production posture. Local dev that wants to step through `runDispatch` needs the flag set:
+
+```bash
+OPENSPEC_FLOW_DISPATCH_MODE=in-process npm run dev
+```
+
+Probot prints `dispatch-mode=<value>` on boot. The `installation.created` handler ignores the flag — it always runs, because only Probot ever sees install events.
+
+#### Driving the App's init PR locally
+
+Two ways to exercise the init-PR path without installing the App on a real repo:
+
+```bash
+# open the PR via gh's token (default)
+npx tsx src/cli.ts app-init --repo <owner/sandbox>
+
+# preview the plan against any remote repo (no writes)
+npx tsx src/cli.ts app-init --repo <owner/sandbox> --dry-run
+```
+
+Same `runAppInit` core the `installation.created` handler calls, so behaviour matches one-for-one.
+
+**Token scopes**: the init commit writes `.github/workflows/openspec-flow.yml`, which GitHub gates behind the `workflow` scope (separate from `repo`). If `gh auth status` shows scopes without `workflow`, the tree-write returns 404 with `Not Found - .../create-a-tree`. Fix once:
+
+```bash
+gh auth refresh -s workflow
+```
+
+The App-mode equivalent is `Workflows: Read & write` in the App's permission manifest — see `docs/app-setup.md`.
+
 ### Manufacture events (terminal 3)
 
 The fastest way to trigger work without clicking around in GitHub:

@@ -60,7 +60,7 @@ Open an issue. Apply `openspec:go`. Done.
 
 ### Mode B — install the GitHub App (coming soon)
 
-One-click org-wide install. No workflow file needed. See `docs/architecture.md`.
+One-click org-wide install. On install, the App opens a per-repo setup PR (branch `chore/openspec-flow-init`) that scaffolds the shim workflow + README managed regions — review and merge, then add `ANTHROPIC_API_KEY` and the flow is live. See `docs/architecture.md`.
 
 ## Use it
 
