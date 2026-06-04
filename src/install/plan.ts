@@ -20,6 +20,10 @@ export interface FsState {
   cwd: string;
   workflow: string | null;
   readme: string | null;
+  // Optional explicit remote `owner/name`. When undefined, the planner
+  // resolves it from `cwd` via `git remote get-url origin`. App-mode
+  // callers pass it directly because there is no checkout.
+  remote?: string | null;
 }
 
 export type ActionKind = "write" | "patch-readme" | "noop";
@@ -111,8 +115,8 @@ const insertBadgeUnderTitle = (
 
 const planReadme = (state: FsState, opts: PlanOptions): Action => {
   const abs = path.join(state.cwd, README_REL);
-  const repoName = path.basename(state.cwd);
-  const remote = resolveRemote(state.cwd);
+  const repoName = state.remote ? state.remote.split("/")[1] : path.basename(state.cwd);
+  const remote = state.remote !== undefined ? state.remote : resolveRemote(state.cwd);
   const block = renderReadmeBlock();
 
   // Three-state model (per marker pair): README absent → create.

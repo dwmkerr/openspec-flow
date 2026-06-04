@@ -1,6 +1,8 @@
 import type { Context, Probot } from "probot";
 import { Intent, classify, describe } from "./intent.js";
 import { runDispatch } from "./dispatch.js";
+import { dispatchMode } from "./config.js";
+import { runAppInit } from "./app-install/index.js";
 
 // openspec-flow Probot entry point.
 //
@@ -32,14 +34,26 @@ let rootLog: Probot["log"] | undefined;
 
 export default (app: Probot): void => {
   rootLog = app.log;
-  app.log.info("openspec-flow Probot booted");
+  const mode = dispatchMode();
+  app.log.info(`openspec-flow Probot booted`);
+  app.log.info(`dispatch-mode=${mode}`);
 
   for (const name of EVENTS) {
     app.on(name, async (context) => {
+      // In-proc event dispatch is dev-only. In `action` mode the shim
+      // workflow in the user's repo handles these events; Probot
+      // staying out of the way prevents double-fire.
+      if (dispatchMode() !== "in-process") return;
       const intent = classify(context.name, context.payload as unknown);
       await dispatch(intent, context);
     });
   }
+
+  // Install bootstrap — opens the per-repo init PR on first install.
+  // Ignores DISPATCH_MODE because only Probot can see this event.
+  app.on("installation.created", async (context) => {
+    await handleInstallationCreated(context);
+  });
 };
 
 const isActionable = (intent: Intent): boolean =>
@@ -140,4 +154,42 @@ const dispatch = async (
     logError: (msg, err) =>
       context.log.error({ ...eventContext(context), err: err.message }, msg),
   });
+};
+
+// On install, open a setup PR in each newly-attached repo. Serial so
+// a rate-limit on repo N doesn't abort N+1; per-repo errors are
+// logged-and-swallowed for the same reason.
+const handleInstallationCreated = async (
+  context: Context<"installation.created">,
+): Promise<void> => {
+  const payload = context.payload as any;
+  const account = payload?.installation?.account?.login ?? "?";
+  const repos: { name: string }[] = payload?.repositories ?? [];
+  context.log.info(
+    `installation.created — account=${account} repos=${repos.length}`,
+  );
+  const log = {
+    info: (m: string) => context.log.info(m),
+    warn: (m: string) => context.log.warn(m),
+  };
+  for (const r of repos) {
+    try {
+      await runAppInit(
+        { octokit: context.octokit as any, log },
+        { owner: account, name: r.name },
+        { dryRun: false },
+      );
+    } catch (err: any) {
+      const status = err?.status;
+      const remaining = err?.response?.headers?.["x-ratelimit-remaining"];
+      if (status === 403 && remaining === "0") {
+        context.log.warn(`${account}/${r.name}: rate-limited; continuing`);
+        continue;
+      }
+      context.log.error(
+        { err: err?.message ?? String(err) },
+        `${account}/${r.name}: app-init failed`,
+      );
+    }
+  }
 };
