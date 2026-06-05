@@ -5,6 +5,9 @@ import { dispatchMode } from "./config.js";
 import { runAppInit } from "./app-install/index.js";
 import { addEyes, removeEyes } from "./reactions.js";
 import { upsertImplBreadcrumb } from "./handlers/shared/issue-breadcrumb.js";
+import { handleTokenRequest } from "./oidc-broker/route.js";
+import type { InstallationTokenIssuer } from "./oidc-broker/index.js";
+import express from "express";
 
 // openspec-flow Probot entry point.
 //
@@ -34,7 +37,13 @@ const EVENTS = [
 // from the agent stream.
 let rootLog: Probot["log"] | undefined;
 
-export default (app: Probot): void => {
+// Probot v13's app function takes options as a second arg, including
+// the `getRouter` factory we need to mount the OIDC broker route.
+interface AppOptions {
+  getRouter?: (path?: string) => import("express").Router;
+}
+
+export default (app: Probot, options: AppOptions = {}): void => {
   rootLog = app.log;
   const mode = dispatchMode();
   app.log.info(`openspec-flow Probot booted`);
@@ -123,7 +132,59 @@ export default (app: Probot): void => {
   app.on("workflow_run.completed", async (context) => {
     await handleWorkflowRunCompleted(context);
   });
+
+  // OIDC token broker — POST /api/token. Workflow runners exchange a
+  // GitHub-issued OIDC ID token for a fresh App installation token
+  // so target repos never need the App's private key as a secret.
+  // The route is only registered when the broker audience is
+  // configured; absent OPENSPEC_FLOW_BROKER_AUDIENCE it's a no-op.
+  const audience = process.env.OPENSPEC_FLOW_BROKER_AUDIENCE;
+  if (audience && options.getRouter) {
+    const router = options.getRouter("/api");
+    router.use(express.json());
+    const issuer = buildBrokerIssuer(app);
+    const log = {
+      info: (m: string) => app.log.info(m),
+      warn: (m: string) => app.log.warn(m),
+    };
+    router.post(
+      "/token",
+      handleTokenRequest({ config: { audience }, issuer, log }),
+    );
+    app.log.info(`oidc-broker mounted at /api/token (audience=${audience})`);
+  } else {
+    app.log.info("oidc-broker disabled (set OPENSPEC_FLOW_BROKER_AUDIENCE to enable)");
+  }
 };
+
+// Build the InstallationTokenIssuer used by the broker. Wraps
+// Probot's auth surface so we don't duplicate the App-JWT plumbing
+// that already lives there.
+const buildBrokerIssuer = (app: Probot): InstallationTokenIssuer => ({
+  getInstallationId: async (owner, repo) => {
+    // App-level Octokit (no installation id) — uses the App JWT, not
+    // an installation token, so it can call the per-repo install
+    // lookup endpoint.
+    const appOctokit = await (app as any).auth();
+    const res = await appOctokit.request(
+      "GET /repos/{owner}/{repo}/installation",
+      { owner, repo },
+    );
+    return res.data.id as number;
+  },
+  mintToken: async (installationId) => {
+    // Probot's auth(installationId) returns an Octokit pre-authed
+    // as that installation. The underlying auth strategy exposes a
+    // token via .auth({type:"installation"}) — same trick the
+    // dispatch path uses to get a push token.
+    const installOctokit = await (app as any).auth(installationId);
+    const auth = (await installOctokit.auth({ type: "installation" })) as {
+      token: string;
+      expiresAt: string;
+    };
+    return { token: auth.token, expiresAt: auth.expiresAt };
+  },
+});
 
 // Intents that originate from a user adding `openspec:go` — the only
 // trigger we want to acknowledge with 👀.
