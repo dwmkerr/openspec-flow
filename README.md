@@ -18,23 +18,27 @@
    [issue #42]                 [PR #43 openspec:spec]        [PR #44 openspec:impl]
 ```
 
-You apply one label (`openspec:go`). The bot applies the rest:
+You apply one label. The bot applies the rest.
 
 | Label | Applied by | Meaning |
 |---|---|---|
-| `openspec:go` | **you** | Trigger. Add to an issue to start the flow, or to a PR to re-run iteration. |
-| `openspec:spec` | bot | Marks the spec PR opened by the agent. Review the proposal + spec, then merge. |
-| `openspec:impl` | bot | Marks the implementation PR opened by the agent. Review the code, then merge to ship. |
+| `openspec:go` | **you** | Trigger. Add to an issue to start; add to a PR to re-run iteration. |
+| `openspec:spec` | bot | Spec PR — review the proposal, then merge. |
+| `openspec:impl` | bot | Implementation PR — review the code, then merge to ship. |
 
-Discussion is optional. Comment on a PR with feedback, then add `openspec:go` again — the agent updates the spec or implementation in place.
-
-See the [mental model page](./public/index.html) for the full one-page picture.
+Discussion is optional. Comment, re-apply `openspec:go`, the agent updates in place.
 
 ## Install
 
-Two install modes. Pick one.
+### Mode A — install the GitHub App (recommended)
 
-### Mode A — drop in a workflow file (simplest)
+```
+https://github.com/apps/openspec-flow-dev/installations/new
+```
+
+Pick the repo. The App opens a setup PR (branch `chore/openspec-flow-init`) that scaffolds the shim workflow + README block + creates the three contract labels. Set `ANTHROPIC_API_KEY` (`gh secret set ANTHROPIC_API_KEY -R <owner/repo>`) and merge.
+
+### Mode B — drop in a workflow file
 
 In your repo, add `.github/workflows/openspec-flow.yml`:
 
@@ -42,62 +46,43 @@ In your repo, add `.github/workflows/openspec-flow.yml`:
 name: openspec-flow
 on:
   issues:            { types: [labeled] }
+  pull_request:      { types: [labeled, closed] }
   issue_comment:     { types: [created] }
   pull_request_review_comment: { types: [created] }
-
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
 jobs:
   flow:
-    uses: dwmkerr/openspec-flow/.github/workflows/openspec-flow.yml@v1
+    uses: dwmkerr/openspec-flow/.github/workflows/openspec-flow.yml@main
     secrets:
       ANTHROPIC_API_KEY:          ${{ secrets.ANTHROPIC_API_KEY }}
-      OPENSPEC_FLOW_APP_ID:       ${{ secrets.OPENSPEC_FLOW_APP_ID }}
-      OPENSPEC_FLOW_PRIVATE_KEY:  ${{ secrets.OPENSPEC_FLOW_PRIVATE_KEY }}
+      OPENSPEC_FLOW_APP_ID:       ${{ secrets.OPENSPEC_FLOW_APP_ID || '' }}
+      OPENSPEC_FLOW_PRIVATE_KEY:  ${{ secrets.OPENSPEC_FLOW_PRIVATE_KEY || '' }}
 ```
 
-Add three secrets (`ANTHROPIC_API_KEY`, `OPENSPEC_FLOW_APP_ID`, `OPENSPEC_FLOW_PRIVATE_KEY`).
-Add the three labels (`openspec:go`, `openspec:spec`, `openspec:impl`).
-Open an issue. Apply `openspec:go`. Done.
+Add `ANTHROPIC_API_KEY` to repo secrets. Create the three contract labels. Or just run `npx @dwmkerr/openspec-flow install` to do all of that.
 
-### Mode B — install the GitHub App (coming soon)
+## Use
 
-One-click org-wide install. On install, the App opens a per-repo setup PR (branch `chore/openspec-flow-init`) that scaffolds the shim workflow + README managed regions — review and merge, then add `ANTHROPIC_API_KEY` and the flow is live. See `docs/architecture.md`.
-
-## Use it
-
-1. Open an issue. Describe a feature, bug, or task.
-2. Apply the `openspec:go` label.
-3. The agent opens a **spec PR** (`openspec:spec`). Review it. Comment if changes needed. Merge.
-4. The agent opens an **implementation PR** (`openspec:impl`) that matches the merged spec. Review it. Merge to ship.
+1. Open an issue describing the work.
+2. Apply `openspec:go`.
+3. Review the spec PR. Merge.
+4. Review the impl PR. Merge to ship.
 
 That's the whole interface.
 
-## What's inside
-
-- Built on [OpenSpec](https://github.com/Fission-AI/OpenSpec) — the spec-driven development framework.
-- Powered by Claude Code 2.0 via `anthropics/claude-code-action`.
-- Composite actions for orchestration, lifted from the original implementation in [livedown](https://github.com/dwmkerr/livedown).
-
-See [`docs/architecture.md`](./docs/architecture.md) for the full picture.
-
 ## Develop
 
-See [`docs/developer-guide.md`](./docs/developer-guide.md). The short version:
+See [`docs/developer-guide.md`](./docs/developer-guide.md). Built on [OpenSpec](https://github.com/Fission-AI/OpenSpec) + Claude Agent SDK. Architecture in [`docs/architecture.md`](./docs/architecture.md).
 
 ```bash
 npm install
-cp .env.example .env  # fill in App credentials + Anthropic key
+cp .env.example .env
 npm run dev:tunnel    # terminal 1
 npm run dev           # terminal 2
-
-# trigger work from terminal 3
-./scripts/smoke/label-issue.sh
 ```
-
-Sub-5-second iteration once set up.
-
-## Status
-
-Phase 1 — extracting from livedown. Phase 2 — Probot App. See [`docs/architecture.md`](./docs/architecture.md) for the roadmap.
 
 ## License
 

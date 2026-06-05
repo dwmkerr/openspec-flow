@@ -56,38 +56,26 @@ You'll spend most time in Mode B's loop because it's seconds, not minutes. Mode 
 - `gh` CLI authenticated to your GitHub account
 - A registered GitHub App named `openspec-flow-dev` (see "Register a dev App" below)
 - A sandbox repo where the App is installed — for now use this repo (`dwmkerr/openspec-flow`)
-- ngrok or smee for webhook tunneling
+- A smee.io channel for webhook delivery
 
 ### Register a dev App
 
 See [`docs/app-setup.md`](./app-setup.md). One-time, ~5 minutes. End state: `private-key.pem` at repo root and a filled `.env`.
 
-### Webhook tunnel — pick one
-
-**ngrok (recommended)** — has a free static domain and a replay inspector at `localhost:4040`:
+### Webhook delivery (smee.io)
 
 ```bash
 # one-time
-ngrok config add-authtoken <token>           # free signup at ngrok.com
-ngrok config edit                            # add: agent: { ... domains: ["yourname-openspec.ngrok-free.app"] }
+open https://smee.io/new            # copy the channel URL
+echo "https://smee.io/<channel>" > .smee-url
 
 # every day (terminal 1)
-ngrok http 3000
+npm run dev:tunnel
 ```
 
-In the App settings page, set Webhook URL to `https://yourname-openspec.ngrok-free.app/api/github/webhooks`. One-time. The static domain means you never update this.
+In the App settings page, set Webhook URL to the smee channel URL (e.g. `https://smee.io/<channel>`). One-time.
 
-**smee.io (simpler, less powerful)** — no replay UI:
-
-```bash
-# one-time
-visit https://smee.io/new, copy the URL
-
-# every day (terminal 1)
-npx smee -u https://smee.io/CHANNEL --path /api/github/webhooks --port 3000
-```
-
-In the App settings page, set Webhook URL to the smee URL.
+Smee has a payload inspector at the channel URL (open it in a browser to replay any delivery).
 
 ### Dev server (terminal 2)
 
@@ -106,6 +94,12 @@ OPENSPEC_FLOW_DISPATCH_MODE=in-process npm run dev
 ```
 
 Probot prints `dispatch-mode=<value>` on boot. The `installation.created` handler ignores the flag — it always runs, because only Probot ever sees install events.
+
+#### 👀 reaction lifecycle
+
+The 👀 fast-ack is also exempt from the gate. On any `openspec:go` event that classifies to `create-spec` / `iterate-spec` / `iterate-impl`, the Probot adapter calls `addEyes` before the gate (sub-second feedback for App-installed repos regardless of mode). On `workflow_run.completed` for the `openspec-flow` workflow, it parses the issue number from the head branch (`chore/<n>-<slug>` or `feat/<n>-<slug>`) and calls `removeEyes`.
+
+The dispatch core (`src/dispatch.ts`) wraps `runDispatch` in `try { addEyes … } finally { removeEyes }` so Action-mode-only installs (no App) still get always-on eyes via the runner-side path. Both `addEyes` and `removeEyes` live in `src/reactions.ts` and are idempotent — repeat adds against the same user/content return 200; removes against missing reactions swallow 404.
 
 #### Driving the App's init PR locally
 
@@ -154,7 +148,7 @@ Wrap these into `scripts/smoke/*.sh` once the patterns stabilise.
 
 When iterating on a single handler:
 
-- **ngrok inspector** (`localhost:4040` in browser): every received webhook is visible; click any one and hit `Replay`. Lets you edit the body before replay.
+- **Smee channel UI** (open the channel URL in a browser): every delivery is logged; one-click replay any past payload.
 - **Probot's built-in fixture replay:** `npx probot receive -e issues -p fixtures/issues.labeled.json ./src/index.ts`. Use this for unit-style runs with captured fixtures.
 - **GitHub redelivery API:** `gh api -X POST /app/hook/deliveries/{id}/attempts` — re-delivers a real past event. 3-day window.
 
@@ -264,7 +258,7 @@ Decision deferred. Right now it works for both.
 
 ```bash
 npm run dev               # start Probot with auto-reload
-npm run dev:tunnel        # start ngrok (or smee) tunnel
+npm run dev:tunnel        # start smee proxy
 npm test                  # Jest unit tests
 npm run test:watch        # Jest in watch mode
 npm run lint
@@ -286,7 +280,7 @@ act issues -e tests/fixtures/issues.labeled.openspec-go.json -W .github/workflow
 
 ## Common failure modes
 
-- **Webhook not arriving** — check tunnel is up. Open ngrok's `localhost:4040` to see incoming requests. Verify Webhook URL in App settings matches the tunnel URL.
+- **Webhook not arriving** — check the smee proxy is running. Open the channel URL in a browser to see incoming deliveries. Verify Webhook URL in App settings matches the smee channel URL.
 - **Signature verification failed** — `WEBHOOK_SECRET` mismatch between `.env` and App settings.
 - **403 on PR create** — App not installed on target repo, or missing `Pull requests: Write` permission.
 - **403 on workflow file update** — using `GITHUB_TOKEN` instead of an App-minted token. See above.
@@ -301,7 +295,6 @@ act issues -e tests/fixtures/issues.labeled.openspec-go.json -W .github/workflow
 - **Composite action** — a multi-step action defined in `action.yml` under `.github/actions/`. Lifted 8 of these from livedown.
 - **Probot** — Node.js framework that wraps Octokit + webhook routing.
 - **smee** — webhook tunnel maintained by Probot. Free, basic.
-- **ngrok** — webhook tunnel with a paid tier and an excellent replay inspector. Free tier now includes static domains.
 - **`openspec:go`** — the trigger label users add to an issue to invoke the bot.
 - **`openspec:spec`** — label on the spec PR.
 - **`openspec:impl`** — label on the implementation PR.

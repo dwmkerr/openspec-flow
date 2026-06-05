@@ -17,7 +17,7 @@ Idempotent. Safe to re-run.
 ## Prerequisites
 
 - `make dev` running (Probot + tsx watch on `:3000`)
-- `make tunnel` running (ngrok forwarding to `:3000`)
+- `make tunnel` running (smee proxy forwarding to `:3000`)
 - `gh` CLI authenticated against `dwmkerr/openspec-flow` (or override
   with `SANDBOX_REPO=owner/repo`)
 
@@ -92,7 +92,8 @@ Two things to watch:
 2. **`make dev` pane** — every event logs a structured `INFO (event)`
    line with `event`, `target`, `intent`, `summary`. If you don't see
    one, the webhook didn't reach the dev server — check `make tunnel`
-   and the ngrok inspector at <http://127.0.0.1:4040>.
+   is running and open the smee channel URL in a browser to confirm
+   deliveries are landing.
 
 ## After testing
 

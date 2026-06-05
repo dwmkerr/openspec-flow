@@ -3,6 +3,7 @@ import { Intent, classify, describe } from "./intent.js";
 import { runDispatch } from "./dispatch.js";
 import { dispatchMode } from "./config.js";
 import { runAppInit } from "./app-install/index.js";
+import { addEyes, removeEyes } from "./reactions.js";
 
 // openspec-flow Probot entry point.
 //
@@ -40,11 +41,19 @@ export default (app: Probot): void => {
 
   for (const name of EVENTS) {
     app.on(name, async (context) => {
+      const intent = classify(context.name, context.payload as unknown);
+
+      // Fast 👀 ack runs BEFORE the dispatch-mode gate. The gate
+      // scopes dispatch, not acknowledgement — App-installed repos
+      // should see sub-second eyes even when the shim does the work.
+      // Restricted to label-driven actionable intents so noise labels
+      // don't trigger eyes.
+      await maybeAddEyes(intent, context);
+
       // In-proc event dispatch is dev-only. In `action` mode the shim
       // workflow in the user's repo handles these events; Probot
       // staying out of the way prevents double-fire.
       if (dispatchMode() !== "in-process") return;
-      const intent = classify(context.name, context.payload as unknown);
       await dispatch(intent, context);
     });
   }
@@ -54,6 +63,101 @@ export default (app: Probot): void => {
   app.on("installation.created", async (context) => {
     await handleInstallationCreated(context);
   });
+
+  // Same bootstrap for repos added to an existing installation. The
+  // payload uses `repositories_added` instead of `repositories`; the
+  // per-repo work (init PR + label provisioning) is identical, so we
+  // adapt the payload shape and reuse the existing handler logic.
+  app.on("installation_repositories.added", async (context) => {
+    const payload = context.payload as any;
+    const account = payload?.installation?.account?.login ?? "?";
+    const added: { name: string }[] = payload?.repositories_added ?? [];
+    context.log.info(
+      `installation_repositories.added — account=${account} repos=${added.length}`,
+    );
+    // Build a synthetic installation.created-shaped payload so the
+    // handler can be shared verbatim. Avoids two near-identical loops.
+    const synthetic = {
+      ...context,
+      payload: {
+        ...payload,
+        repositories: added,
+      },
+    } as unknown as Context<"installation.created">;
+    await handleInstallationCreated(synthetic);
+  });
+
+  // Uninstall events — log only. Useful while debugging install/UI
+  // flows: shows the App seeing the off-cycle.
+  app.on("installation.deleted", async (context) => {
+    const p = context.payload as any;
+    const account = p?.installation?.account?.login ?? "?";
+    const repos: { name: string }[] = p?.repositories ?? [];
+    context.log.info(
+      `installation.deleted — account=${account} repos=${repos.map((r) => r.name).join(",") || "(none in payload)"}`,
+    );
+  });
+
+  app.on("installation_repositories.removed", async (context) => {
+    const p = context.payload as any;
+    const account = p?.installation?.account?.login ?? "?";
+    const removed: { name: string }[] = p?.repositories_removed ?? [];
+    context.log.info(
+      `installation_repositories.removed — account=${account} repos=${removed.map((r) => r.name).join(",") || "(none)"}`,
+    );
+  });
+
+  // Workflow-completion cleanup for the App's fast 👀: removes the
+  // reaction once the shim workflow finishes (success or failure) so
+  // the issue/PR doesn't keep a stale ack across iterations. Idempotent
+  // with the dispatch-core's own finally-remove.
+  app.on("workflow_run.completed", async (context) => {
+    await handleWorkflowRunCompleted(context);
+  });
+};
+
+// Intents that originate from a user adding `openspec:go` — the only
+// trigger we want to acknowledge with 👀.
+const eyeAckIntents = new Set(["create-spec", "iterate-spec", "iterate-impl"]);
+
+const maybeAddEyes = async (
+  intent: Intent,
+  context: Context<(typeof EVENTS)[number]>,
+): Promise<void> => {
+  if (!eyeAckIntents.has(intent.kind)) return;
+  const num = targetNumber(context.payload);
+  if (num === null) return;
+  await addEyes(
+    context.octokit as any,
+    context.repo().owner,
+    context.repo().repo,
+    num,
+    { warn: (m: string) => context.log.warn(m) },
+  );
+};
+
+// Match the branch conventions written by the create-spec / create-impl
+// handlers. Heads like `chore/42-add-export` or `feat/42-add-export`
+// carry the originating issue number in the second segment.
+const ISSUE_FROM_BRANCH = /^(?:chore|feat)\/(\d+)-/;
+
+const handleWorkflowRunCompleted = async (
+  context: Context<"workflow_run.completed">,
+): Promise<void> => {
+  const run = (context.payload as any)?.workflow_run;
+  if (!run || run.name !== "openspec-flow") return;
+  const branch: string | undefined = run.head_branch;
+  if (!branch) return;
+  const match = branch.match(ISSUE_FROM_BRANCH);
+  if (!match) return;
+  const issueNumber = Number(match[1]);
+  await removeEyes(
+    context.octokit as any,
+    context.repo().owner,
+    context.repo().repo,
+    issueNumber,
+    { warn: (m: string) => context.log.warn(m) },
+  );
 };
 
 const isActionable = (intent: Intent): boolean =>

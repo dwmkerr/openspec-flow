@@ -14,7 +14,7 @@ dev-log: # Run dev with full output tee'd to logs/dev-<ts>.log.
 	npm run dev 2>&1 | tee logs/dev-$(shell date +%Y%m%dT%H%M%S).log
 
 .PHONY: tunnel
-tunnel: # Run the ngrok tunnel for local webhook delivery.
+tunnel: # Run the smee webhook proxy for local Probot delivery (reads .smee-url).
 	npm run dev:tunnel
 
 .PHONY: test

@@ -72,7 +72,7 @@ openspec-flow SHALL turn every relevant GitHub event into a typed `Intent` via t
 
 ### Requirement: App and Action modes share one dispatch core
 
-openspec-flow SHALL run in two modes — the Probot App and the GitHub Action — that share the same `runDispatch` core, such that any change to routing behaviour applies to both. In the Probot App, in-proc dispatch of `issues` and `pull_request` events SHALL be gated by the environment variable `OPENSPEC_FLOW_DISPATCH_MODE`: when its value is `in-process`, the App adapter SHALL call `runDispatch` for these events; for any other value (including unset), the App adapter SHALL no-op these events so the Action adapter — running in the user's repository — is the sole dispatcher. The `installation.created` handler SHALL ignore the flag and always run, because no Action-mode path exists for installation events.
+openspec-flow SHALL run in two modes — the Probot App and the GitHub Action — that share the same `runDispatch` core, such that any change to routing behaviour applies to both. In the Probot App, in-proc dispatch of `issues` and `pull_request` events SHALL be gated by the environment variable `OPENSPEC_FLOW_DISPATCH_MODE`: when its value is `in-process`, the App adapter SHALL call `runDispatch` for these events; for any other value (including unset), the App adapter SHALL no-op these events so the Action adapter — running in the user's repository — is the sole dispatcher. The `installation.created` handler SHALL ignore the flag and always run, because no Action-mode path exists for installation events. **Best-effort acknowledgement side effects (specifically the 👀 reaction add/remove via `src/reactions.ts`) are also exempt from the dispatch-mode gate** — the gate scopes dispatch, not acknowledgement. The App adapter MAY call `addEyes` before the gate and `removeEyes` from a separate event handler (`workflow_run.completed`) regardless of the flag value.
 
 #### Scenario: Both modes produce the same outcome for the same event when in-process is enabled
 
@@ -92,6 +92,13 @@ openspec-flow SHALL run in two modes — the Probot App and the GitHub Action �
 - **GIVEN** `OPENSPEC_FLOW_DISPATCH_MODE` is unset
 - **WHEN** Probot receives an `installation.created` webhook
 - **THEN** the App adapter runs the install-bootstrap handler
+
+#### Scenario: Eyes reaction is added regardless of dispatch mode
+
+- **GIVEN** `OPENSPEC_FLOW_DISPATCH_MODE` is unset
+- **WHEN** Probot receives an `issues.labeled` webhook adding `openspec:go` to an open issue
+- **THEN** the App adapter calls `addEyes` on the issue
+- **AND** the App adapter still no-ops the dispatch (the shim handles it)
 
 ### Requirement: Probot logs the active dispatch mode on boot
 

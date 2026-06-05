@@ -234,12 +234,11 @@ The user's pain: edit code → push → wait for Actions → check logs → fix 
 Two terminals, one sandbox repo, real GitHub:
 
 ```bash
-# Terminal 1 — webhook tunnel
-npx smee -u https://smee.io/CHANNEL --path /github/webhook --port 3000
-# (or ngrok with a static domain for replay UI at localhost:4040)
+# Terminal 1 — smee webhook proxy (channel URL in .smee-url)
+npm run dev:tunnel
 
 # Terminal 2 — hot-reload dev server
-tsx watch src/index.ts
+npm run dev
 
 # Terminal 3 — manufacture events on demand
 gh issue create -R me/openspec-flow-sandbox -t "Test" -b "..."
@@ -250,7 +249,7 @@ gh pr comment 2 --body "spec needs multi-line"
 Each save in `src/` restarts the process in ~1s. Each `gh` command fires a real webhook through smee → your local process. End-to-end visibility, no Action waiting.
 
 For replay without firing fresh events:
-- ngrok's `localhost:4040` inspector — one-click replay any past webhook
+- Smee channel UI in a browser — one-click replay any past delivery
 - GitHub's webhook redelivery API (`POST /app/hook/deliveries/{id}/attempts`) — script with `gh api`
 - `probot receive -e issues -p fixtures/issues.labeled.json ./index.ts` — replay a fixture file
 
@@ -262,7 +261,7 @@ For unit tests:
 
 | Tool | Purpose |
 |---|---|
-| ngrok with static free domain | Webhook tunnel + replay inspector |
+| smee.io | Webhook proxy + replay UI on the channel URL |
 | `tsx watch` | Sub-second TypeScript restart |
 | Probot | Webhook routing + Octokit |
 | `@octokit/webhooks-examples` | Realistic fixture payloads |
@@ -341,7 +340,7 @@ openspec-flow/
 **Phase 2 — Probot App:**
 - Port the composite-action logic to a TypeScript module callable from either path.
 - Stand up Probot on Fly.io.
-- Wire smee + ngrok local-dev loop.
+- Wire smee local-dev loop.
 - Use App installation tokens; verify `workflows: write` works.
 - Marketplace listing.
 
