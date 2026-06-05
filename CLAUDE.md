@@ -137,6 +137,17 @@ The slug is a kebab-case rendering of the issue title. The impl prefix is
 `feat` by default; configurability per issue type is on the roadmap (see
 `ideas.md`). Branches are auto-deleted on merge.
 
+## Deployment
+
+Probot runs in one of three places per task; URLs in App / repo
+config decide which:
+
+- **Local** — `make tunnel` (smee) + `make dev`. Hot-reload, breakpoint debug. App webhook URL = smee channel.
+- **Fly dev** — `fly deploy -a openspec-flow-dev`. Stable URL for the broker and webhook receiver while iterating remotely. See `docs/deploy-fly.md`.
+- **Fly prod** — `fly deploy -a openspec-flow`. Production.
+
+App webhook URL and broker URL (`OPENSPEC_FLOW_BROKER_URL` repo/org variable) are independent: mix-and-match across modes per task. The Fly Dockerfile + `fly.toml` deploy the same code that runs locally; secrets via `fly secrets set`. Private key is read from `PRIVATE_KEY` env when present, else from `PRIVATE_KEY_PATH` (local dev default).
+
 ## Install modes
 
 | Mode | What user does | Where agent runs |

@@ -1,0 +1,47 @@
+# Fly.io app config. Used by `fly deploy` — values here are app-name +
+# region defaults; secrets and per-env values come from `fly secrets set`
+# and the env vars below.
+#
+# Two deployments are expected against this config (separate Fly apps,
+# same code):
+#
+#   openspec-flow-dev   — webhooks from the dev App + broker for local-dev
+#                         target repos. App ID + private key are the dev
+#                         App's. Stable URL replaces cloudflared tunnels.
+#
+#   openspec-flow       — webhooks + broker for production installs. App ID
+#                         + private key are the prod App's.
+#
+# `fly launch` writes the `app = "..."` value; treat that as
+# per-deployment. Everything else is shared between dev and prod.
+
+app = "openspec-flow"
+primary_region = "lhr"
+kill_signal = "SIGINT"
+kill_timeout = 5
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "3000"
+  # Bind 0.0.0.0 so Fly's proxy can reach us; local dev binds 127.0.0.1.
+  HOST = "0.0.0.0"
+  # Default to prod-safe `action` dispatch mode. Probot processes
+  # install events + UX side effects; shim runs dispatch in user repos.
+  OPENSPEC_FLOW_DISPATCH_MODE = "action"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  # Single shared-cpu machine handles webhooks + broker comfortably
+  # for the expected request volume (≤ a few req/min). Scaling beyond
+  # that is a separate decision.
+  min_machines_running = 0
+  processes = ["app"]
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
