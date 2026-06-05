@@ -43,11 +43,38 @@ jobs:
       # Surface the App id so the conditional token step can gate on it.
       OPENSPEC_FLOW_APP_ID: ${{ secrets.OPENSPEC_FLOW_APP_ID }}
     steps:
-      # Mint an App token only when App creds are present. Its output
-      # token (if any) is preferred over GITHUB_TOKEN below.
-      - name: Mint App token
+      # Mint an App token, preferring (in order):
+      #   1. OIDC broker exchange — no App secrets in target repo.
+      #      Requires OPENSPEC_FLOW_BROKER_URL repo/org variable and
+      #      `id-token: write` permission (shim ships with both).
+      #   2. Legacy APP_ID + PRIVATE_KEY secrets — older shims.
+      # If neither is configured, falls back to GITHUB_TOKEN below
+      # (which can't push workflow files — see init PR body).
+      - name: Mint App token (OIDC broker)
+        id: broker-token
+        if: ${{ vars.OPENSPEC_FLOW_BROKER_URL != '' }}
+        run: |
+          set -euo pipefail
+          ID_TOKEN=$(curl -sS \
+            -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=openspec-flow" \
+            | jq -r .value)
+          RESP=$(curl -sS -X POST \
+            -H "Authorization: Bearer ${ID_TOKEN}" \
+            "${BROKER_URL}/api/token")
+          APP_TOKEN=$(echo "$RESP" | jq -r .token)
+          if [[ "$APP_TOKEN" == "null" || -z "$APP_TOKEN" ]]; then
+            echo "broker rejected token request: $RESP" >&2
+            exit 1
+          fi
+          echo "::add-mask::$APP_TOKEN"
+          echo "token=$APP_TOKEN" >> "$GITHUB_OUTPUT"
+        env:
+          BROKER_URL: ${{ vars.OPENSPEC_FLOW_BROKER_URL }}
+
+      - name: Mint App token (legacy secrets)
         id: app-token
-        if: ${{ env.OPENSPEC_FLOW_APP_ID != '' }}
+        if: ${{ vars.OPENSPEC_FLOW_BROKER_URL == '' && env.OPENSPEC_FLOW_APP_ID != '' }}
         uses: actions/create-github-app-token@v1
         with:
           app-id: ${{ secrets.OPENSPEC_FLOW_APP_ID }}
@@ -85,6 +112,7 @@ jobs:
         env:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           # GITHUB_EVENT_PATH is set automatically by the runner.
-          OPENSPEC_FLOW_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          # Priority: broker (OIDC, no secrets) → legacy App secret → GITHUB_TOKEN.
+          OPENSPEC_FLOW_TOKEN: ${{ steps.broker-token.outputs.token || steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.broker-token.outputs.token || steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

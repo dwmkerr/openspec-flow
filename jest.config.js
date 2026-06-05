@@ -9,6 +9,10 @@ module.exports = {
   moduleFileExtensions: ["ts", "js", "json"],
   collectCoverageFrom: ["src/**/*.ts", "!src/**/*.test.ts"],
   // Strip `.js` extensions added for Node16 ESM-style imports so ts-jest can resolve.
-  moduleNameMapper: { "^(\\.{1,2}/.*)\\.js$": "$1" },
+  // Also redirect `jose` to its CJS build — the ESM-default entry can't be required
+  // by ts-jest's CJS transform, but the CJS bundle is shipped alongside.
+  moduleNameMapper: {
+    "^(\\.{1,2}/.*)\\.js$": "$1",
+  },
   transform: { "^.+\\.ts$": ["ts-jest", { tsconfig: "tsconfig.json" }] },
 };

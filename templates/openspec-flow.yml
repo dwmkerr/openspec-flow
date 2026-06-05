@@ -18,6 +18,13 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
+  # Required by the OIDC token broker path: the reusable workflow
+  # requests a GitHub-signed OIDC token and exchanges it for an App
+  # installation token at openspec-flow.example.com/api/token. Without
+  # this permission the broker exchange falls through to the legacy
+  # App secret path (or GITHUB_TOKEN, which cannot push workflow
+  # files).
+  id-token: write
 jobs:
   flow:
     uses: dwmkerr/openspec-flow/.github/workflows/openspec-flow.yml@main
