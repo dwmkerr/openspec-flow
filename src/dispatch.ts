@@ -45,6 +45,16 @@ export interface DispatchDeps {
   logError?: (msg: string, err: Error) => void;
 }
 
+export interface DispatchResult {
+  // false when an actionable intent's handler threw. Callers (CLI
+  // dispatch step, Probot adapter) use this to bubble failure into
+  // the runner's exit code so the workflow's red/green badge matches
+  // reality. The error is logged here regardless; ok=false just makes
+  // it visible at the process boundary.
+  ok: boolean;
+  error?: Error;
+}
+
 // Run the actionable / visible-noop dispatch sequence. Callers must
 // have already short-circuited silent noops and resolved targetNumber.
 //
@@ -56,7 +66,7 @@ export interface DispatchDeps {
 export const runDispatch = async (
   intent: Intent,
   deps: DispatchDeps,
-): Promise<void> => {
+): Promise<DispatchResult> => {
   const summary = describe(intent);
 
   // Eyes reaction is the fast deterministic ack — best-effort, never
@@ -86,7 +96,7 @@ export const runDispatch = async (
 
     // Visible-noop intents are terminal: the sticky comment carries the
     // reason and there's no handler to run.
-    if (intent.kind === "noop") return;
+    if (intent.kind === "noop") return { ok: true };
 
     try {
       const token = await deps.getToken();
@@ -105,6 +115,8 @@ export const runDispatch = async (
       if (!result.dispatched) {
         // Classified intent has no handler yet. Surface it on the sticky
         // status comment so the reviewer doesn't see "Starting…" hang.
+        // This is a misconfiguration, not a transient failure — bubble
+        // it as ok=false so the run goes red.
         deps.log.warn(`intent ${result.kind} classified but not implemented`);
         if (statusCommentId !== undefined) {
           await updateStatusComment(
@@ -116,11 +128,21 @@ export const runDispatch = async (
             { warn: (m: string) => deps.log.warn(m) },
           );
         }
+        return {
+          ok: false,
+          error: new Error(`intent ${result.kind} not implemented`),
+        };
       }
+
+      return { ok: true };
     } catch (err) {
       const e = err as Error;
       if (deps.logError) deps.logError(`${intent.kind} handler failed`, e);
       else deps.log.warn(`${intent.kind} handler failed: ${e.message}`);
+      // Surfaced upward so the CLI dispatch step (action mode) exits
+      // non-zero and the workflow run goes red — matches reality.
+      // Today this silently exited 0 even when the agent crashed mid-run.
+      return { ok: false, error: e };
     }
   } finally {
     // Always clear the ack so a re-trigger renders fresh eyes. The

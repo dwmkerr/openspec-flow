@@ -146,7 +146,7 @@ const runDispatchCommand = async (): Promise<number> => {
   const { Octokit } = await import("@octokit/rest");
   const octokit = new Octokit({ auth: token });
   const { runDispatch } = await import("./dispatch.js");
-  await runDispatch(intent, {
+  const result = await runDispatch(intent, {
     octokit: octokit as any,
     owner,
     repo: name,
@@ -154,6 +154,13 @@ const runDispatchCommand = async (): Promise<number> => {
     log: stdoutLogger,
     getToken: async () => token,
   });
+  // Bubble handler failure into the runner's exit code so the
+  // workflow's red/green badge matches reality. Pre-fix, every
+  // crashed handler exited 0 and the run showed green.
+  if (!result.ok) {
+    stdoutLogger.warn(`dispatch failed: ${result.error?.message ?? "unknown"}`);
+    return 1;
+  }
   return 0;
 };
 

@@ -82,13 +82,15 @@ describe("runDispatch", () => {
     expect(body).toContain("not implemented");
   });
 
-  it("handler error routes to logError, does not throw", async () => {
+  it("handler error routes to logError and returns ok=false with the error", async () => {
     (dispatchTo as jest.Mock).mockRejectedValue(new Error("boom"));
     const logError = jest.fn();
     const deps = makeDeps({ logError });
     const intent: Intent = { kind: "create-spec", issueNumber: 7, title: "t" };
 
-    await expect(runDispatch(intent, deps)).resolves.toBeUndefined();
+    const result = await runDispatch(intent, deps);
+    expect(result.ok).toBe(false);
+    expect(result.error?.message).toBe("boom");
     expect(logError).toHaveBeenCalledTimes(1);
     expect(logError.mock.calls[0][1].message).toBe("boom");
   });
