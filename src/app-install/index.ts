@@ -11,6 +11,7 @@
 // CLI install three-state model so repeated installs are quiet.
 
 import { plan, type Action, allNoop } from "../install/plan.js";
+import { CONTRACT_LABELS } from "../install/detect.js";
 
 const BRANCH = "chore/openspec-flow-init";
 const PR_TITLE = "chore: openspec-flow setup";
@@ -118,6 +119,33 @@ const assertCanWriteWorkflows = async (
   }
 };
 
+// Ensure the three contract labels exist. createLabel is idempotent
+// in spirit — GitHub returns 422 when the name already exists, which
+// we treat as success so a re-run is quiet. Color/description on
+// existing labels are not reconciled; the user owns their look.
+const ensureContractLabels = async (
+  octokit: any,
+  owner: string,
+  repo: string,
+  log: { info: (m: string) => void; warn: (m: string) => void },
+): Promise<void> => {
+  for (const label of CONTRACT_LABELS) {
+    try {
+      await octokit.issues.createLabel({
+        owner,
+        repo,
+        name: label.name,
+        color: label.color,
+        description: label.description,
+      });
+      log.info(`  + label '${label.name}' created`);
+    } catch (err: any) {
+      if (err?.status === 422) continue; // already exists
+      log.warn(`  label '${label.name}' create failed: ${err?.message ?? String(err)}`);
+    }
+  }
+};
+
 const hasOpenInitPR = async (
   octokit: any,
   owner: string,
@@ -144,6 +172,10 @@ const renderPrBody = (owner: string, name: string): string => {
     `- \`${WORKFLOW_PATH}\` — the reusable-workflow shim that drives the flow on every \`openspec:go\` label.`,
     "- A badge under the README H1 linking to the workflow's runs.",
     "- A short README block describing the user-facing flow.",
+    "",
+    "## Already done outside this PR",
+    "",
+    "- The three contract labels (`openspec:go`, `openspec:spec`, `openspec:impl`) have been created on this repo. Re-creating an existing label is a no-op so a re-install is quiet.",
     "",
     "## Before merging",
     "",
@@ -291,6 +323,14 @@ export const runAppInit = async (
     files,
     actions,
   };
+
+  // Label provisioning runs ahead of the idempotency check so a repo
+  // that already has the files but is missing labels still gets them
+  // (common when the repo was init'd before this code existed). Best-
+  // effort: missing labels can be created manually if the API fails.
+  if (!opts.dryRun) {
+    await ensureContractLabels(octokit, owner, name, log);
+  }
 
   // Idempotency — both file/marker checks are encoded in the planner's
   // noop output, so a single `allNoop` matches the CLI install contract.

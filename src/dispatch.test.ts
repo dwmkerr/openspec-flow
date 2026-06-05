@@ -19,7 +19,11 @@ import {
 import type { Intent } from "./intent.js";
 
 const makeOctokit = () => ({
-  reactions: { createForIssue: jest.fn(async () => ({})) },
+  reactions: {
+    createForIssue: jest.fn(async () => ({})),
+    listForIssue: jest.fn(async () => ({ data: [] })),
+    deleteForIssue: jest.fn(async () => ({})),
+  },
 });
 
 const makeDeps = (over: Partial<Parameters<typeof runDispatch>[1]> = {}) => ({
@@ -87,5 +91,34 @@ describe("runDispatch", () => {
     await expect(runDispatch(intent, deps)).resolves.toBeUndefined();
     expect(logError).toHaveBeenCalledTimes(1);
     expect(logError.mock.calls[0][1].message).toBe("boom");
+  });
+
+  it("happy path lists+deletes eyes reactions at the end", async () => {
+    (dispatchTo as jest.Mock).mockResolvedValue({ dispatched: true });
+    const deps = makeDeps();
+    deps.octokit.reactions.listForIssue = jest.fn(async () => ({
+      data: [{ id: 11 }, { id: 12 }],
+    }));
+    const intent: Intent = { kind: "create-spec", issueNumber: 7, title: "t" };
+
+    await runDispatch(intent, deps);
+
+    expect(deps.octokit.reactions.listForIssue).toHaveBeenCalledTimes(1);
+    expect(deps.octokit.reactions.deleteForIssue).toHaveBeenCalledTimes(2);
+  });
+
+  it("failure path still clears eyes via finally", async () => {
+    (dispatchTo as jest.Mock).mockRejectedValue(new Error("boom"));
+    const deps = makeDeps({ logError: jest.fn() });
+    deps.octokit.reactions.listForIssue = jest.fn(async () => ({
+      data: [{ id: 99 }],
+    }));
+    const intent: Intent = { kind: "create-spec", issueNumber: 7, title: "t" };
+
+    await runDispatch(intent, deps);
+
+    expect(deps.octokit.reactions.deleteForIssue).toHaveBeenCalledWith(
+      expect.objectContaining({ reaction_id: 99 }),
+    );
   });
 });

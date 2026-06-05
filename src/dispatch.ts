@@ -17,17 +17,15 @@ import {
 import { statusReceived } from "./handlers/shared/status-bodies.js";
 import type { RunAgentLogger } from "./agent/run.js";
 import type { MinimalOctokit } from "./handlers/create-impl/index.js";
+import { addEyes, removeEyes } from "./reactions.js";
 
 // The core needs the handler octokit surface plus the reactions
-// endpoint for the eyes ack.
+// endpoints for the eyes lifecycle (add at start, remove at end).
 type DispatchOctokit = MinimalOctokit & {
   reactions: {
-    createForIssue: (params: {
-      owner: string;
-      repo: string;
-      issue_number: number;
-      content: string;
-    }) => Promise<unknown>;
+    createForIssue: (params: any) => Promise<unknown>;
+    listForIssue: (params: any) => Promise<any>;
+    deleteForIssue: (params: any) => Promise<unknown>;
   };
 };
 
@@ -47,21 +45,14 @@ export interface DispatchDeps {
   logError?: (msg: string, err: Error) => void;
 }
 
-const reactEyes = async (deps: DispatchDeps): Promise<void> => {
-  try {
-    await deps.octokit.reactions.createForIssue({
-      owner: deps.owner,
-      repo: deps.repo,
-      issue_number: deps.targetNumber,
-      content: "eyes",
-    });
-  } catch (err) {
-    deps.log.warn(`eyes reaction failed: ${(err as Error).message}`);
-  }
-};
-
 // Run the actionable / visible-noop dispatch sequence. Callers must
 // have already short-circuited silent noops and resolved targetNumber.
+//
+// Reaction lifecycle: 👀 added on entry (covers Action-mode-only
+// installs where Probot can't), removed on every exit path so a
+// re-trigger gets a fresh ack instead of stale ones piling up. The
+// Probot adapter may have already added the same reaction pre-gate;
+// addEyes treats GitHub's 200-on-duplicate as success.
 export const runDispatch = async (
   intent: Intent,
   deps: DispatchDeps,
@@ -70,64 +61,72 @@ export const runDispatch = async (
 
   // Eyes reaction is the fast deterministic ack — best-effort, never
   // blocks the comment that follows.
-  await reactEyes(deps);
-
-  // One sticky status comment per intent. Visible noops are terminal:
-  // the body is just the reason. Actionable intents start at "received"
-  // and the handler mutates the body as it progresses.
-  const body = intent.kind === "noop" ? summary : statusReceived(summary);
-
-  let statusCommentId: number | undefined;
-  try {
-    statusCommentId = await createStatusComment(
-      deps.octokit as any,
-      deps.owner,
-      deps.repo,
-      deps.targetNumber,
-      body,
-    );
-  } catch (err) {
-    deps.log.warn(
-      `status comment create failed; handler will run without upsert: ${(err as Error).message}`,
-    );
-  }
-
-  // Visible-noop intents are terminal: the sticky comment carries the
-  // reason and there's no handler to run.
-  if (intent.kind === "noop") return;
+  await addEyes(deps.octokit as any, deps.owner, deps.repo, deps.targetNumber, deps.log);
 
   try {
-    const token = await deps.getToken();
-    if (!token) throw new Error("could not obtain a token");
+    // One sticky status comment per intent. Visible noops are terminal:
+    // the body is just the reason. Actionable intents start at "received"
+    // and the handler mutates the body as it progresses.
+    const body = intent.kind === "noop" ? summary : statusReceived(summary);
 
-    const result = await dispatchTo(intent, {
-      owner: deps.owner,
-      repo: deps.repo,
-      octokit: deps.octokit,
-      gitPushToken: token,
-      log: deps.log,
-      statusCommentId,
-      statusTargetNumber: deps.targetNumber,
-    });
-
-    if (!result.dispatched) {
-      // Classified intent has no handler yet. Surface it on the sticky
-      // status comment so the reviewer doesn't see "Starting…" hang.
-      deps.log.warn(`intent ${result.kind} classified but not implemented`);
-      if (statusCommentId !== undefined) {
-        await updateStatusComment(
-          deps.octokit as any,
-          deps.owner,
-          deps.repo,
-          statusCommentId,
-          `❌ \`${result.kind}\` is classified but not implemented yet — manage manually.`,
-          { warn: (m: string) => deps.log.warn(m) },
-        );
-      }
+    let statusCommentId: number | undefined;
+    try {
+      statusCommentId = await createStatusComment(
+        deps.octokit as any,
+        deps.owner,
+        deps.repo,
+        deps.targetNumber,
+        body,
+      );
+    } catch (err) {
+      deps.log.warn(
+        `status comment create failed; handler will run without upsert: ${(err as Error).message}`,
+      );
     }
-  } catch (err) {
-    const e = err as Error;
-    if (deps.logError) deps.logError(`${intent.kind} handler failed`, e);
-    else deps.log.warn(`${intent.kind} handler failed: ${e.message}`);
+
+    // Visible-noop intents are terminal: the sticky comment carries the
+    // reason and there's no handler to run.
+    if (intent.kind === "noop") return;
+
+    try {
+      const token = await deps.getToken();
+      if (!token) throw new Error("could not obtain a token");
+
+      const result = await dispatchTo(intent, {
+        owner: deps.owner,
+        repo: deps.repo,
+        octokit: deps.octokit,
+        gitPushToken: token,
+        log: deps.log,
+        statusCommentId,
+        statusTargetNumber: deps.targetNumber,
+      });
+
+      if (!result.dispatched) {
+        // Classified intent has no handler yet. Surface it on the sticky
+        // status comment so the reviewer doesn't see "Starting…" hang.
+        deps.log.warn(`intent ${result.kind} classified but not implemented`);
+        if (statusCommentId !== undefined) {
+          await updateStatusComment(
+            deps.octokit as any,
+            deps.owner,
+            deps.repo,
+            statusCommentId,
+            `❌ \`${result.kind}\` is classified but not implemented yet — manage manually.`,
+            { warn: (m: string) => deps.log.warn(m) },
+          );
+        }
+      }
+    } catch (err) {
+      const e = err as Error;
+      if (deps.logError) deps.logError(`${intent.kind} handler failed`, e);
+      else deps.log.warn(`${intent.kind} handler failed: ${e.message}`);
+    }
+  } finally {
+    // Always clear the ack so a re-trigger renders fresh eyes. The
+    // Probot adapter's workflow_run.completed remove is the App-mode
+    // backstop for cases where this finally never runs (process killed,
+    // runner timeout); both are idempotent.
+    await removeEyes(deps.octokit as any, deps.owner, deps.repo, deps.targetNumber, deps.log);
   }
 };
