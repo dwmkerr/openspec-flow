@@ -197,6 +197,7 @@ export const runCli = async (argv: string[]): Promise<number> => {
     )
     .requiredOption("--repo <owner/name>", "target repository")
     .option("--dry-run", "compute the plan without writing", false)
+    .option("--force", "force-upgrade: re-render shim + managed README regions from current templates even when already-initialised; bypasses the pr-already-open skip and force-updates the init branch in place", false)
     .option("--token <value>", "GitHub token; falls back to GITHUB_TOKEN, then `gh auth token`")
     .option("--as-app", "mint a GitHub App installation token so the PR is authored by <slug>[bot] (needs OPENSPEC_FLOW_APP_ID + OPENSPEC_FLOW_PRIVATE_KEY_PATH; App must already be installed on the target repo)")
     .action(async (opts) => {
@@ -232,7 +233,7 @@ export const runCli = async (argv: string[]): Promise<number> => {
       const result = await runAppInit(
         { octokit: octokit as any, log: stdoutLogger },
         { owner, name },
-        { dryRun: !!opts.dryRun },
+        { dryRun: !!opts.dryRun, force: !!opts.force },
       );
       if (result.skipped) {
         stdoutLogger.info(`skipped: ${result.skipped}`);
