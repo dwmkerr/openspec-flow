@@ -4,6 +4,7 @@ import { runDispatch } from "./dispatch.js";
 import { dispatchMode } from "./config.js";
 import { runAppInit } from "./app-install/index.js";
 import { addEyes, removeEyes } from "./reactions.js";
+import { upsertImplBreadcrumb } from "./handlers/shared/issue-breadcrumb.js";
 
 // openspec-flow Probot entry point.
 //
@@ -49,6 +50,14 @@ export default (app: Probot): void => {
       // Restricted to label-driven actionable intents so noise labels
       // don't trigger eyes.
       await maybeAddEyes(intent, context);
+
+      // Issue early breadcrumb for create-impl. Sticky comment for
+      // this intent lives on the spec PR, leaving the originating
+      // issue silent for 30+ seconds until the workflow runner spins
+      // up. Posting now gives the issue a visible signal that work
+      // started; the workflow's create-impl handler upserts the same
+      // marker later with the run link + progress states.
+      await maybeBreadcrumbImplStart(intent, context);
 
       // In-proc event dispatch is dev-only. In `action` mode the shim
       // workflow in the user's repo handles these events; Probot
@@ -119,6 +128,23 @@ export default (app: Probot): void => {
 // Intents that originate from a user adding `openspec:go` — the only
 // trigger we want to acknowledge with 👀.
 const eyeAckIntents = new Set(["create-spec", "iterate-spec", "iterate-impl"]);
+
+const maybeBreadcrumbImplStart = async (
+  intent: Intent,
+  context: Context<(typeof EVENTS)[number]>,
+): Promise<void> => {
+  if (intent.kind !== "create-impl") return;
+  if (intent.issueNumber === null) return;
+  await upsertImplBreadcrumb(
+    context.octokit as any,
+    context.repo().owner,
+    context.repo().repo,
+    intent.issueNumber,
+    intent.specPrNumber,
+    { kind: "starting" },
+    { warn: (m: string) => context.log.warn(m) },
+  );
+};
 
 const maybeAddEyes = async (
   intent: Intent,
