@@ -48,6 +48,10 @@ export interface RenderWorkflowOptions {
   // workflow's default. Repo-level `vars.OPENSPEC_FLOW_BROKER_URL`
   // still overrides this if a power user sets it.
   brokerUrl?: string;
+  // Audience the broker requires on the OIDC token. Must match the
+  // Probot host's `OPENSPEC_FLOW_BROKER_AUDIENCE`. Baked alongside
+  // `broker_url` so dev / prod brokers each get their own audience.
+  brokerAudience?: string;
 }
 
 export const renderWorkflow = (
@@ -62,10 +66,14 @@ export const renderWorkflow = (
     // is verbatim from the bundled template.
     content = content.replace(REF_LINE, `$1${ref}`);
   }
-  if (opts.brokerUrl) {
+  if (opts.brokerUrl || opts.brokerAudience) {
     // Inject `with:` block between `uses:` and `secrets:`. Indented at
-    // 4 spaces to match the existing `secrets:` indentation.
-    const withBlock = `    with:\n      broker_url: '${opts.brokerUrl}'\n`;
+    // 4 spaces to match the existing `secrets:` indentation. Both
+    // broker inputs share one block; either may be omitted.
+    const lines: string[] = ["    with:"];
+    if (opts.brokerUrl) lines.push(`      broker_url: '${opts.brokerUrl}'`);
+    if (opts.brokerAudience) lines.push(`      broker_audience: '${opts.brokerAudience}'`);
+    const withBlock = lines.join("\n") + "\n";
     content = content.replace(
       USES_LINE_FOLLOWED_BY_SECRETS,
       `$1${withBlock}$2`,

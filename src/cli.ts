@@ -212,6 +212,7 @@ export const runCli = async (argv: string[]): Promise<number> => {
     .option("--dry-run", "compute the plan without writing", false)
     .option("--force", "force-upgrade: re-render shim + managed README regions from current templates even when already-initialised; bypasses the pr-already-open skip and force-updates the init branch in place", false)
     .option("--broker <url>", "bake an OIDC broker URL into the shim's `with: broker_url:`. Defaults to OPENSPEC_FLOW_BROKER_PUBLIC_URL env when omitted; falls through to the reusable workflow's default when neither is set.")
+    .option("--broker-audience <name>", "OIDC audience the broker requires. Bake into shim's `with: broker_audience:`. Defaults to OPENSPEC_FLOW_BROKER_AUDIENCE env when omitted.")
     .option("--token <value>", "GitHub token; falls back to GITHUB_TOKEN, then `gh auth token`")
     .option("--as-app", "mint a GitHub App installation token so the PR is authored by <slug>[bot] (needs OPENSPEC_FLOW_APP_ID + OPENSPEC_FLOW_PRIVATE_KEY_PATH; App must already be installed on the target repo)")
     .action(async (opts) => {
@@ -247,7 +248,12 @@ export const runCli = async (argv: string[]): Promise<number> => {
       const result = await runAppInit(
         { octokit: octokit as any, log: stdoutLogger },
         { owner, name },
-        { dryRun: !!opts.dryRun, force: !!opts.force, brokerUrl: opts.broker },
+        {
+          dryRun: !!opts.dryRun,
+          force: !!opts.force,
+          brokerUrl: opts.broker,
+          brokerAudience: opts.brokerAudience,
+        },
       );
       if (result.skipped) {
         stdoutLogger.info(`skipped: ${result.skipped}`);

@@ -46,6 +46,11 @@ export interface AppInitOpts {
   // own broker). Repo `vars.OPENSPEC_FLOW_BROKER_URL` always wins
   // over either.
   brokerUrl?: string;
+  // OIDC audience the broker requires. Burned into shim alongside
+  // brokerUrl. Falls back to OPENSPEC_FLOW_BROKER_AUDIENCE env when
+  // unset so a Fly-deployed Probot bakes its own audience into every
+  // install. Repo `vars.OPENSPEC_FLOW_BROKER_AUDIENCE` wins over both.
+  brokerAudience?: string;
 }
 
 export interface PlannedFile {
@@ -334,9 +339,11 @@ export const runAppInit = async (
   // repos automatically use this Probot as their broker. Local dev
   // (no env) leaves it undefined → reusable workflow uses its default.
   const brokerUrl = opts.brokerUrl ?? process.env.OPENSPEC_FLOW_BROKER_PUBLIC_URL;
+  const brokerAudience =
+    opts.brokerAudience ?? process.env.OPENSPEC_FLOW_BROKER_AUDIENCE;
   const actions = plan(
     { cwd: "", workflow, readme, remote: slug },
-    { force, brokerUrl },
+    { force, brokerUrl, brokerAudience },
   );
 
   const prTitle = force ? "chore: openspec-flow upgrade" : PR_TITLE;
