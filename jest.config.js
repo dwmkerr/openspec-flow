@@ -15,4 +15,7 @@ module.exports = {
     "^(\\.{1,2}/.*)\\.js$": "$1",
   },
   transform: { "^.+\\.ts$": ["ts-jest", { tsconfig: "tsconfig.json" }] },
+  // Scrub GitHub Actions env so status-comment bodies render
+  // deterministically whether tests run locally or in CI.
+  setupFiles: ["<rootDir>/jest.setup.ts"],
 };
