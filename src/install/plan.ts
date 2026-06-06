@@ -39,13 +39,18 @@ export interface Action {
 
 export interface PlanOptions {
   force: boolean;
+  // When set, the rendered shim carries `with: broker_url: <url>` so
+  // OIDC token exchange uses the install-time URL by default. Local-
+  // dev installs leave this undefined to fall through to the reusable
+  // workflow's hardcoded default.
+  brokerUrl?: string;
 }
 
 const WORKFLOW_REL = ".github/workflows/openspec-flow.yml";
 const README_REL = "README.md";
 
-const planWorkflow = (state: FsState, _opts: PlanOptions): Action => {
-  const target = renderWorkflow();
+const planWorkflow = (state: FsState, opts: PlanOptions): Action => {
+  const target = renderWorkflow({ brokerUrl: opts.brokerUrl });
   const abs = path.join(state.cwd, WORKFLOW_REL);
   if (state.workflow === null) {
     return { kind: "write", path: abs, content: target, reason: "creating shim" };

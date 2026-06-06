@@ -39,6 +39,13 @@ export interface AppInitOpts {
   // commits automatically. The planner runs with `force: true` so it
   // overwrites managed regions instead of leaving them alone.
   force?: boolean;
+  // Bake a `broker_url:` input into the rendered shim so target
+  // repos use this URL for OIDC token exchange by default. Falls back
+  // to `OPENSPEC_FLOW_BROKER_PUBLIC_URL` env when omitted (set on the
+  // Probot host so install-time installs auto-point at the host's
+  // own broker). Repo `vars.OPENSPEC_FLOW_BROKER_URL` always wins
+  // over either.
+  brokerUrl?: string;
 }
 
 export interface PlannedFile {
@@ -323,9 +330,13 @@ export const runAppInit = async (
   const readme = await fetchFile(octokit, owner, name, README_PATH, defaultBranch);
 
   const force = !!opts.force;
+  // The Probot host writes its own public URL into the shim so target
+  // repos automatically use this Probot as their broker. Local dev
+  // (no env) leaves it undefined → reusable workflow uses its default.
+  const brokerUrl = opts.brokerUrl ?? process.env.OPENSPEC_FLOW_BROKER_PUBLIC_URL;
   const actions = plan(
     { cwd: "", workflow, readme, remote: slug },
-    { force },
+    { force, brokerUrl },
   );
 
   const prTitle = force ? "chore: openspec-flow upgrade" : PR_TITLE;

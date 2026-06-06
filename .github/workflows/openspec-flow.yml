@@ -21,15 +21,26 @@
 # event-trigger contract lives in exactly one place — the shim template.
 on:
   workflow_call:
+    inputs:
+      broker_url:
+        description: |
+          OIDC token broker URL. The shim is rendered with the URL of the
+          Probot host that ran the install (Fly dev, Fly prod, or omitted
+          for local-dev installs that should use the default below).
+          Repo override path: set the `OPENSPEC_FLOW_BROKER_URL` Actions
+          variable; that wins over this input.
+        type: string
+        required: false
+        default: 'https://openspec-flow.fly.dev'
     secrets:
       ANTHROPIC_API_KEY:
         description: Anthropic API key for the Claude agent.
         required: true
       OPENSPEC_FLOW_APP_ID:
-        description: GitHub App id for bot identity (optional).
+        description: GitHub App id for bot identity (optional, legacy path).
         required: false
       OPENSPEC_FLOW_PRIVATE_KEY:
-        description: GitHub App private key for bot identity (optional).
+        description: GitHub App private key for bot identity (optional, legacy path).
         required: false
 
 jobs:
@@ -50,9 +61,14 @@ jobs:
       #   2. Legacy APP_ID + PRIVATE_KEY secrets — older shims.
       # If neither is configured, falls back to GITHUB_TOKEN below
       # (which can't push workflow files — see init PR body).
+      # Broker URL resolution (highest priority wins):
+      #   1. vars.OPENSPEC_FLOW_BROKER_URL — per-repo (or per-org) override
+      #   2. inputs.broker_url — set in the shim at install time (Probot
+      #      bakes its public URL in when the install handler runs)
+      #   3. reusable workflow's own default (workflow_call input default)
       - name: Mint App token (OIDC broker)
         id: broker-token
-        if: ${{ vars.OPENSPEC_FLOW_BROKER_URL != '' }}
+        if: ${{ vars.OPENSPEC_FLOW_BROKER_URL != '' || inputs.broker_url != '' }}
         run: |
           set -euo pipefail
           ID_TOKEN=$(curl -sS \
@@ -70,11 +86,11 @@ jobs:
           echo "::add-mask::$APP_TOKEN"
           echo "token=$APP_TOKEN" >> "$GITHUB_OUTPUT"
         env:
-          BROKER_URL: ${{ vars.OPENSPEC_FLOW_BROKER_URL }}
+          BROKER_URL: ${{ vars.OPENSPEC_FLOW_BROKER_URL || inputs.broker_url }}
 
       - name: Mint App token (legacy secrets)
         id: app-token
-        if: ${{ vars.OPENSPEC_FLOW_BROKER_URL == '' && env.OPENSPEC_FLOW_APP_ID != '' }}
+        if: ${{ vars.OPENSPEC_FLOW_BROKER_URL == '' && inputs.broker_url == '' && env.OPENSPEC_FLOW_APP_ID != '' }}
         uses: actions/create-github-app-token@v1
         with:
           app-id: ${{ secrets.OPENSPEC_FLOW_APP_ID }}
