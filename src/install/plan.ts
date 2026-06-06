@@ -39,13 +39,18 @@ export interface Action {
 
 export interface PlanOptions {
   force: boolean;
+  // When set, the rendered shim carries `with: broker_url: <url>` so
+  // OIDC token exchange uses the install-time URL by default. Local-
+  // dev installs leave this undefined to fall through to the reusable
+  // workflow's hardcoded default.
+  brokerUrl?: string;
 }
 
 const WORKFLOW_REL = ".github/workflows/openspec-flow.yml";
 const README_REL = "README.md";
 
-const planWorkflow = (state: FsState, _opts: PlanOptions): Action => {
-  const target = renderWorkflow();
+const planWorkflow = (state: FsState, opts: PlanOptions): Action => {
+  const target = renderWorkflow({ brokerUrl: opts.brokerUrl });
   const abs = path.join(state.cwd, WORKFLOW_REL);
   if (state.workflow === null) {
     return { kind: "write", path: abs, content: target, reason: "creating shim" };
@@ -53,7 +58,17 @@ const planWorkflow = (state: FsState, _opts: PlanOptions): Action => {
   if (state.workflow === target) {
     return { kind: "noop", path: abs, content: state.workflow, reason: "matches template" };
   }
-  // Hand-edited (or stale version). Don't clobber on a plain run.
+  // Hand-edited or stale (template moved on, broker_url added, etc).
+  // With --force, overwrite; otherwise leave it alone and tell the
+  // user how to upgrade.
+  if (opts.force) {
+    return {
+      kind: "write",
+      path: abs,
+      content: target,
+      reason: "force: overwriting divergent shim from current template",
+    };
+  }
   return {
     kind: "noop",
     path: abs,

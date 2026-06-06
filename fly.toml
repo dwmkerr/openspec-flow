@@ -1,0 +1,35 @@
+# fly.toml app configuration file generated for openspec-flow-dev on 2026-06-05T19:12:52+01:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'openspec-flow-dev'
+primary_region = 'lhr'
+kill_signal = 'SIGINT'
+kill_timeout = '5s'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[env]
+  HOST = '0.0.0.0'
+  OPENSPEC_FLOW_DISPATCH_MODE = 'action'
+  PORT = '3000'
+  # The public URL this Probot is reachable at. Baked into the shim
+  # at install time so target repos auto-point at this host as their
+  # broker — no manual `gh variable set OPENSPEC_FLOW_BROKER_URL`.
+  # For openspec-flow-dev this is the .fly.dev URL; override per app
+  # via `fly secrets set` if you point a custom domain at this app.
+  OPENSPEC_FLOW_BROKER_PUBLIC_URL = 'https://openspec-flow-dev.fly.dev'
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '256mb'

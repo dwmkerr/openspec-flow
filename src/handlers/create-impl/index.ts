@@ -28,6 +28,7 @@ import { summariseProposal } from "../create-spec/changes.js";
 import { parseSpecPrMetadata } from "../shared/spec-pr-metadata.js";
 import { updateStatusComment } from "../shared/status-comment.js";
 import { upsertLifecycleComment } from "../shared/lifecycle-comment.js";
+import { upsertImplBreadcrumb } from "../shared/issue-breadcrumb.js";
 import {
   statusImplementing,
   statusPushing,
@@ -156,6 +157,20 @@ export const handleCreateImpl = async (
       throw new Error("could not resolve change context (changeName/issueNumber/specBranch/issueTitle)");
     }
 
+    // Upsert the issue early breadcrumb now that we know the issue
+    // number and the change name. The App may have posted a
+    // "starting" version pre-gate; this upsert adds the run-link and
+    // the change name in lockstep with the runner's start.
+    await upsertImplBreadcrumb(
+      opts.octokit as any,
+      opts.owner,
+      opts.repo,
+      resolvedIssue,
+      opts.specPrNumber,
+      { kind: "implementing", changeName },
+      { warn: opts.log.warn },
+    );
+
     workdir = createWorkdir(resolvedIssue);
     opts.log.info(`create-impl: workdir=${workdir}`);
 
@@ -259,6 +274,19 @@ export const handleCreateImpl = async (
         { phase: "impl-opened", specPr: opts.specPrNumber, implPr: pr.data.number },
         { warn: opts.log.warn },
       );
+
+      // Replace the early breadcrumb with the terminal opened state
+      // so the issue thread shows a single "✅ impl PR opened: #M"
+      // entry rather than a stale "implementing…" line.
+      await upsertImplBreadcrumb(
+        opts.octokit as any,
+        opts.owner,
+        opts.repo,
+        resolvedIssue,
+        opts.specPrNumber,
+        { kind: "opened", implPrNumber: pr.data.number },
+        { warn: opts.log.warn },
+      );
     }
 
     opts.log.info(`create-impl: done — ${pr.data.html_url}`);
@@ -273,6 +301,20 @@ export const handleCreateImpl = async (
     // reviewer otherwise wouldn't see the failure context.
     if (implPrNumber !== null) {
       await safeComment(opts.octokit, opts.owner, opts.repo, implPrNumber, failure);
+    }
+    // Mirror the failure onto the originating issue's breadcrumb so
+    // the issue thread reflects the terminal state (the sticky
+    // status comment lives on the spec PR, not the issue).
+    if (resolvedIssue !== undefined) {
+      await upsertImplBreadcrumb(
+        opts.octokit as any,
+        opts.owner,
+        opts.repo,
+        resolvedIssue,
+        opts.specPrNumber,
+        { kind: "failed", reason: msg },
+        { warn: opts.log.warn },
+      );
     }
     throw err;
   } finally {

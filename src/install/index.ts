@@ -17,6 +17,11 @@ export interface InstallOptions {
   cwd: string;
   force: boolean;
   yes: boolean;
+  // Bake a `broker_url:` input into the rendered shim. Power users
+  // testing against a non-default broker (Fly dev, self-hosted) can
+  // pass it explicitly; unset = falls through to the reusable
+  // workflow's default at run time.
+  brokerUrl?: string;
 }
 
 const symbols = {
@@ -164,7 +169,7 @@ export const runInstall = (opts: InstallOptions): number => {
 
   const fs = readState(opts.cwd);
   const state = { cwd: opts.cwd, ...fs };
-  const actions = plan(state, { force: opts.force });
+  const actions = plan(state, { force: opts.force, brokerUrl: opts.brokerUrl });
 
   log(chalk.bold("Plan"));
   actions.forEach((a) => log(renderAction(a)));

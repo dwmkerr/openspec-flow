@@ -11,6 +11,12 @@
 // requests and the GIF will appear broken to readers without access
 // — acceptable trade-off while the repo is private; fix later by
 // hosting on a CDN or making the assets public.
+//
+// Every renderer appends `renderRunLink()` so the reader can jump
+// straight to the workflow run. The link is omitted automatically
+// when not in an Action context (Probot in-proc, local CLI runs).
+
+import { renderRunLink } from "./run-link.js";
 
 const WORKING_GIF_URL =
   "https://raw.githubusercontent.com/dwmkerr/openspec-flow/main/assets/openspec-flow-working.gif";
@@ -21,30 +27,35 @@ const WORKING_GIF_URL =
 const working = (text: string): string =>
   `<img src="${WORKING_GIF_URL}" width="56" align="left" alt="working" /> ${text}`;
 
+// Suffix every rendered body with a watch-the-run link when one is
+// available. Body is regenerated each state mutation, so the link
+// updates in lockstep — no separate edit needed.
+const withRunLink = (body: string): string => `${body}${renderRunLink()}`;
+
 export const statusReceived = (intentSummary: string): string =>
-  working(`openspec-flow received: ${intentSummary}. Starting…`);
+  withRunLink(working(`openspec-flow received: ${intentSummary}. Starting…`));
 
 export const statusReadingIssue = (issueNumber: number): string =>
-  working(`reading context for issue #${issueNumber}…`);
+  withRunLink(working(`reading context for issue #${issueNumber}…`));
 
 export const statusReadingPr = (prNumber: number): string =>
-  working(`reading review context for PR #${prNumber}…`);
+  withRunLink(working(`reading review context for PR #${prNumber}…`));
 
 export const statusImplementing = (changeName: string, issueNumber: number): string =>
-  working(`implementing change \`${changeName}\` for issue #${issueNumber}…`);
+  withRunLink(working(`implementing change \`${changeName}\` for issue #${issueNumber}…`));
 
 export const statusPushing = (): string =>
-  working(`agent finished, pushing branch…`);
+  withRunLink(working(`agent finished, pushing branch…`));
 
 export const statusSpecPrOpened = (prNumber: number): string =>
-  `✅ spec PR opened: #${prNumber}`;
+  withRunLink(`✅ spec PR opened: #${prNumber}`);
 
 export const statusImplPrOpened = (prNumber: number): string =>
-  `✅ impl PR opened: #${prNumber}`;
+  withRunLink(`✅ impl PR opened: #${prNumber}`);
 
-export const statusSpecUpdated = (): string => `✅ spec updated by openspec-flow`;
+export const statusSpecUpdated = (): string => withRunLink(`✅ spec updated by openspec-flow`);
 
-export const statusImplUpdated = (): string => `✅ impl updated by openspec-flow`;
+export const statusImplUpdated = (): string => withRunLink(`✅ impl updated by openspec-flow`);
 
 export const statusFailure = (error: string): string =>
-  `⚠️ openspec-flow failed: ${error}. See dev logs for trace.`;
+  withRunLink(`⚠️ openspec-flow failed: ${error}. See dev logs for trace.`);

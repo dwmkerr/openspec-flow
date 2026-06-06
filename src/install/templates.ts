@@ -34,12 +34,44 @@ const WORKFLOW_TEMPLATE_PATH = join(
 const REF_LINE =
   /(uses: dwmkerr\/openspec-flow\/\.github\/workflows\/openspec-flow\.yml@)\S+/;
 
-export const renderWorkflow = (ref: string = DEFAULT_REF): string => {
-  const base = readFileSync(WORKFLOW_TEMPLATE_PATH, "utf8");
-  if (ref === DEFAULT_REF) return base;
-  // Only the `@ref` token varies between versions; everything else
-  // is verbatim from the bundled template.
-  return base.replace(REF_LINE, `$1${ref}`);
+// Anchor for inserting a `with:` block immediately after the `uses:`
+// line. The template always has secrets indented at 4 spaces; the
+// with block is placed at the same indentation.
+const USES_LINE_FOLLOWED_BY_SECRETS =
+  /(uses: dwmkerr\/openspec-flow\/\.github\/workflows\/openspec-flow\.yml@\S+\n)(    secrets:)/;
+
+export interface RenderWorkflowOptions {
+  ref?: string;
+  // When set, the rendered shim carries `with: broker_url: <url>` so
+  // the reusable workflow uses this URL for OIDC token exchange. Omit
+  // for local-dev installs that should fall through to the reusable
+  // workflow's default. Repo-level `vars.OPENSPEC_FLOW_BROKER_URL`
+  // still overrides this if a power user sets it.
+  brokerUrl?: string;
+}
+
+export const renderWorkflow = (
+  refOrOptions: string | RenderWorkflowOptions = DEFAULT_REF,
+): string => {
+  const opts: RenderWorkflowOptions =
+    typeof refOrOptions === "string" ? { ref: refOrOptions } : refOrOptions;
+  const ref = opts.ref ?? DEFAULT_REF;
+  let content = readFileSync(WORKFLOW_TEMPLATE_PATH, "utf8");
+  if (ref !== DEFAULT_REF) {
+    // Only the `@ref` token varies between versions; everything else
+    // is verbatim from the bundled template.
+    content = content.replace(REF_LINE, `$1${ref}`);
+  }
+  if (opts.brokerUrl) {
+    // Inject `with:` block between `uses:` and `secrets:`. Indented at
+    // 4 spaces to match the existing `secrets:` indentation.
+    const withBlock = `    with:\n      broker_url: '${opts.brokerUrl}'\n`;
+    content = content.replace(
+      USES_LINE_FOLLOWED_BY_SECRETS,
+      `$1${withBlock}$2`,
+    );
+  }
+  return content;
 };
 
 // Badge block — placed near the top of the README (right under the

@@ -13,7 +13,13 @@ const requiredEnv = (name: string): string => {
   return v;
 };
 
+// Hosted deployments (Fly, etc.) prefer setting the private key as
+// a multi-line secret env var rather than a file. Local dev keeps
+// using PRIVATE_KEY_PATH for a checked-in .gitignored file. Env
+// wins when both are set.
 const privateKeyPath = process.env.PRIVATE_KEY_PATH ?? "./private-key.pem";
+const privateKey =
+  process.env.PRIVATE_KEY ?? readFileSync(privateKeyPath, "utf8");
 
 // One logger shared by Probot and the Server. When LOG_PATH is set,
 // the logger dual-streams: pretty to stdout (dev pane) AND raw JSON
@@ -22,7 +28,7 @@ const log = buildLogger();
 
 const probot = new Probot({
   appId: requiredEnv("APP_ID"),
-  privateKey: readFileSync(privateKeyPath, "utf8"),
+  privateKey,
   secret: requiredEnv("WEBHOOK_SECRET"),
   log,
 });
@@ -30,12 +36,14 @@ const probot = new Probot({
 const server = new Server({
   Probot: Probot.defaults({
     appId: requiredEnv("APP_ID"),
-    privateKey: readFileSync(privateKeyPath, "utf8"),
+    privateKey,
     secret: requiredEnv("WEBHOOK_SECRET"),
     log,
   }),
   port: Number(process.env.PORT ?? 3000),
-  host: "127.0.0.1",
+  // Hosted deployments bind 0.0.0.0; local dev binds the loopback so
+  // the smee proxy is the only public path in.
+  host: process.env.HOST ?? "127.0.0.1",
   log,
 });
 

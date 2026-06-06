@@ -134,6 +134,54 @@ describe("runAppInit", () => {
     );
   });
 
+  it("force=true bypasses already-initialised even when planner says all-noop", async () => {
+    const initialisedReadme = `# r\n\n<!-- openspec-flow badge-start -->\nx\n<!-- openspec-flow badge-end -->\n\n<!-- openspec-flow install-start -->\ny\n<!-- openspec-flow install-end -->\n`;
+    const octokit = makeOcto({
+      repos: {
+        get: jest.fn().mockResolvedValue({ data: { default_branch: "main" } }),
+        getContent: jest.fn((args: any) =>
+          Promise.resolve({
+            data: {
+              type: "file",
+              encoding: "base64",
+              content: Buffer.from(
+                args.path.endsWith("README.md") ? initialisedReadme : "stale-workflow",
+                "utf8",
+              ).toString("base64"),
+            },
+          }),
+        ),
+      } as any,
+    });
+    const result = await runAppInit(
+      { octokit: octokit as any, log: noopLog },
+      { owner: "o", name: "r" },
+      { dryRun: false, force: true },
+    );
+    expect(result.skipped).toBeUndefined();
+    expect(result.prTitle).toBe("chore: openspec-flow upgrade");
+    expect(octokit.pulls.create).toHaveBeenCalled();
+  });
+
+  it("force=true returns the existing PR URL when pulls.create 422s", async () => {
+    // Force-upgrade skips the hasOpenInitPR pre-check, so the only
+    // pulls.list call is the post-422 recovery lookup.
+    const octokit = makeOcto({
+      pulls: {
+        list: jest.fn().mockResolvedValue({
+          data: [{ number: 7, html_url: "https://github.com/o/r/pull/7" }],
+        }),
+        create: jest.fn().mockRejectedValue({ status: 422 }),
+      } as any,
+    });
+    const result = await runAppInit(
+      { octokit: octokit as any, log: noopLog },
+      { owner: "o", name: "r" },
+      { dryRun: false, force: true },
+    );
+    expect(result.prUrl).toBe("https://github.com/o/r/pull/7");
+  });
+
   it("CLI preflight rejects a token missing the workflow scope", async () => {
     const octokit = makeOcto();
     octokit.request = jest
@@ -171,6 +219,9 @@ describe("runAppInit", () => {
       { dryRun: false },
     );
     const body = octokit.pulls.create.mock.calls[0][0].body as string;
-    expect(body).toContain("gh secret set ANTHROPIC_API_KEY -R o/r");
+    expect(body).toContain("gh secret set ANTHROPIC_API_KEY");
+    expect(body).toContain("OPENSPEC_FLOW_APP_ID");
+    expect(body).toContain("OPENSPEC_FLOW_PRIVATE_KEY");
+    expect(body).toContain("o/r");
   });
 });

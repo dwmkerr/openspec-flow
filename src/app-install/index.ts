@@ -31,6 +31,21 @@ export interface AppInitRepo {
 
 export interface AppInitOpts {
   dryRun: boolean;
+  // Force-upgrade: re-render the shim + managed README regions from
+  // the current templates, even when the planner reports `all-noop`
+  // (markers already present, workflow file present). Also bypasses
+  // the `pr-already-open` short-circuit so the existing init branch
+  // can be force-updated in place — the open PR will pick up the new
+  // commits automatically. The planner runs with `force: true` so it
+  // overwrites managed regions instead of leaving them alone.
+  force?: boolean;
+  // Bake a `broker_url:` input into the rendered shim so target
+  // repos use this URL for OIDC token exchange by default. Falls back
+  // to `OPENSPEC_FLOW_BROKER_PUBLIC_URL` env when omitted (set on the
+  // Probot host so install-time installs auto-point at the host's
+  // own broker). Repo `vars.OPENSPEC_FLOW_BROKER_URL` always wins
+  // over either.
+  brokerUrl?: string;
 }
 
 export interface PlannedFile {
@@ -160,12 +175,15 @@ const hasOpenInitPR = async (
   return res.data.length > 0;
 };
 
-const renderPrBody = (owner: string, name: string): string => {
+const renderPrBody = (owner: string, name: string, force = false): string => {
   const slug = `${owner}/${name}`;
+  const intro = force
+    ? "openspec-flow upgrade — re-renders the shim + managed README regions from the current templates. Use when the upstream openspec-flow template has moved on and your shim needs to catch up (e.g. new `permissions:` block, broker `id-token: write`)."
+    : "This PR was opened automatically by the openspec-flow GitHub App on install. Merging it wires this repository into the spec-driven flow.";
   return [
-    "openspec-flow setup",
+    force ? "openspec-flow upgrade" : "openspec-flow setup",
     "",
-    "This PR was opened automatically by the openspec-flow GitHub App on install. Merging it wires this repository into the spec-driven flow.",
+    intro,
     "",
     "## What this PR adds",
     "",
@@ -177,15 +195,21 @@ const renderPrBody = (owner: string, name: string): string => {
     "",
     "- The three contract labels (`openspec:go`, `openspec:spec`, `openspec:impl`) have been created on this repo. Re-creating an existing label is a no-op so a re-install is quiet.",
     "",
-    "## Before merging",
+    "## Before merging — set Actions secrets",
     "",
-    "Set the required Actions secret on this repository:",
+    "openspec-flow workflows act with App-bot identity to push branches and open PRs. That needs three secrets on this repository (the App can't write them for you):",
     "",
     "```bash",
-    `gh secret set ANTHROPIC_API_KEY -R ${slug}`,
+    `gh secret set ANTHROPIC_API_KEY    -R ${slug}      # value: your Anthropic API key`,
+    `gh secret set OPENSPEC_FLOW_APP_ID -R ${slug} -b "<APP_ID>"`,
+    `gh secret set OPENSPEC_FLOW_PRIVATE_KEY -R ${slug} < private-key.pem`,
     "```",
     "",
-    "Without that secret, the first `openspec:go` run will fail.",
+    "Without `ANTHROPIC_API_KEY`, the agent can't run. Without the App secrets, the workflow falls back to `GITHUB_TOKEN` which (a) can't push workflow file changes (`.github/workflows/*`) and (b) attributes commits to `github-actions[bot]` rather than the openspec-flow App.",
+    "",
+    "> **Less repo-by-repo friction**: set `OPENSPEC_FLOW_PRIVATE_KEY` once as an **organisation secret** so every repo in the org inherits it. See https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions#creating-secrets-for-an-organization",
+    "",
+    "> A future change ([issue here](https://github.com/dwmkerr/openspec-flow/issues)) removes the private-key-as-repo-secret requirement by minting tokens via OIDC against a stateless openspec-flow broker endpoint. Until then, secrets are the standard path (same model as Renovate).",
     "",
     "## After merging",
     "",
@@ -305,12 +329,18 @@ export const runAppInit = async (
   const workflow = await fetchFile(octokit, owner, name, WORKFLOW_PATH, defaultBranch);
   const readme = await fetchFile(octokit, owner, name, README_PATH, defaultBranch);
 
+  const force = !!opts.force;
+  // The Probot host writes its own public URL into the shim so target
+  // repos automatically use this Probot as their broker. Local dev
+  // (no env) leaves it undefined → reusable workflow uses its default.
+  const brokerUrl = opts.brokerUrl ?? process.env.OPENSPEC_FLOW_BROKER_PUBLIC_URL;
   const actions = plan(
     { cwd: "", workflow, readme, remote: slug },
-    { force: false },
+    { force, brokerUrl },
   );
 
-  const prBody = renderPrBody(owner, name);
+  const prTitle = force ? "chore: openspec-flow upgrade" : PR_TITLE;
+  const prBody = renderPrBody(owner, name, force);
   const files: PlannedFile[] = actions
     .filter((a) => a.kind !== "noop")
     .map((a) => ({ path: a.path, contentLength: a.content.length }));
@@ -318,7 +348,7 @@ export const runAppInit = async (
   const base: AppInitResult = {
     repo: slug,
     branch: BRANCH,
-    prTitle: PR_TITLE,
+    prTitle,
     prBody,
     files,
     actions,
@@ -332,17 +362,23 @@ export const runAppInit = async (
     await ensureContractLabels(octokit, owner, name, log);
   }
 
-  // Idempotency — both file/marker checks are encoded in the planner's
-  // noop output, so a single `allNoop` matches the CLI install contract.
-  if (allNoop(actions)) {
-    log.info(`${slug}: skipped — already-initialised`);
-    return { ...base, skipped: "already-initialised" };
-  }
+  // Force bypasses BOTH skip-checks. The planner runs with `force: true`
+  // so the shim + managed README regions are re-rendered from current
+  // templates; the writer force-updates the branch ref so any open
+  // init PR picks up the new commits automatically.
+  if (!force) {
+    // Idempotency — both file/marker checks are encoded in the planner's
+    // noop output, so a single `allNoop` matches the CLI install contract.
+    if (allNoop(actions)) {
+      log.info(`${slug}: skipped — already-initialised`);
+      return { ...base, skipped: "already-initialised" };
+    }
 
-  // Check for a pre-existing init PR before doing anything destructive.
-  if (await hasOpenInitPR(octokit, owner, name)) {
-    log.info(`${slug}: skipped — pr-already-open`);
-    return { ...base, skipped: "pr-already-open" };
+    // Check for a pre-existing init PR before doing anything destructive.
+    if (await hasOpenInitPR(octokit, owner, name)) {
+      log.info(`${slug}: skipped — pr-already-open`);
+      return { ...base, skipped: "pr-already-open" };
+    }
   }
 
   if (opts.dryRun) {
@@ -361,15 +397,34 @@ export const runAppInit = async (
 
   await writeFiles(octokit, owner, name, defaultBranch, actions);
 
-  const pr = await octokit.pulls.create({
-    owner,
-    repo: name,
-    title: PR_TITLE,
-    head: BRANCH,
-    base: defaultBranch,
-    body: prBody,
-  });
-
-  log.info(`${slug}: opened ${pr.data.html_url}`);
-  return { ...base, prUrl: pr.data.html_url };
+  // pulls.create returns 422 when an open PR for this head already
+  // exists. In force-upgrade mode we recover by looking up that PR
+  // and returning its URL — its branch already received the new
+  // commit via writeFiles' force-update, so the existing PR now
+  // shows the upgrade content.
+  let prUrl: string;
+  try {
+    const pr = await octokit.pulls.create({
+      owner,
+      repo: name,
+      title: prTitle,
+      head: BRANCH,
+      base: defaultBranch,
+      body: prBody,
+    });
+    prUrl = pr.data.html_url;
+    log.info(`${slug}: opened ${prUrl}`);
+  } catch (err: any) {
+    if (err?.status !== 422 || !force) throw err;
+    const existing = await octokit.pulls.list({
+      owner,
+      repo: name,
+      state: "open",
+      head: `${owner}:${BRANCH}`,
+    });
+    if (!existing.data.length) throw err;
+    prUrl = existing.data[0].html_url;
+    log.info(`${slug}: upgrade-pushed to existing PR ${prUrl}`);
+  }
+  return { ...base, prUrl };
 };
