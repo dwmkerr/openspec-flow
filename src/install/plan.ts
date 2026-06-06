@@ -58,7 +58,17 @@ const planWorkflow = (state: FsState, opts: PlanOptions): Action => {
   if (state.workflow === target) {
     return { kind: "noop", path: abs, content: state.workflow, reason: "matches template" };
   }
-  // Hand-edited (or stale version). Don't clobber on a plain run.
+  // Hand-edited or stale (template moved on, broker_url added, etc).
+  // With --force, overwrite; otherwise leave it alone and tell the
+  // user how to upgrade.
+  if (opts.force) {
+    return {
+      kind: "write",
+      path: abs,
+      content: target,
+      reason: "force: overwriting divergent shim from current template",
+    };
+  }
   return {
     kind: "noop",
     path: abs,
