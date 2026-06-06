@@ -50,6 +50,12 @@ jobs:
       contents: write
       pull-requests: write
       issues: write
+      # Required for the OIDC broker step — without it, the runner
+      # does not inject ACTIONS_ID_TOKEN_REQUEST_TOKEN/URL and the
+      # curl step fails with `unbound variable`. The caller (shim)
+      # also needs id-token: write at its own permissions block;
+      # the shim template ships with it.
+      id-token: write
     env:
       # Surface the App id so the conditional token step can gate on it.
       OPENSPEC_FLOW_APP_ID: ${{ secrets.OPENSPEC_FLOW_APP_ID }}
