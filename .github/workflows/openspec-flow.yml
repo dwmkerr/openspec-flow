@@ -32,6 +32,16 @@ on:
         type: string
         required: false
         default: 'https://openspec-flow.fly.dev'
+      broker_audience:
+        description: |
+          The `aud` claim the broker requires on the OIDC token. Must
+          match `OPENSPEC_FLOW_BROKER_AUDIENCE` on the Probot host that
+          will accept the token. Set at install time by `runAppInit`
+          from the Probot's own audience env, so dev / prod brokers
+          each get their own.
+        type: string
+        required: false
+        default: 'openspec-flow'
     secrets:
       ANTHROPIC_API_KEY:
         description: Anthropic API key for the Claude agent.
@@ -79,7 +89,7 @@ jobs:
           set -euo pipefail
           ID_TOKEN=$(curl -sS \
             -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=openspec-flow" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${BROKER_AUDIENCE}" \
             | jq -r .value)
           RESP=$(curl -sS -X POST \
             -H "Authorization: Bearer ${ID_TOKEN}" \
@@ -93,6 +103,7 @@ jobs:
           echo "token=$APP_TOKEN" >> "$GITHUB_OUTPUT"
         env:
           BROKER_URL: ${{ vars.OPENSPEC_FLOW_BROKER_URL || inputs.broker_url }}
+          BROKER_AUDIENCE: ${{ vars.OPENSPEC_FLOW_BROKER_AUDIENCE || inputs.broker_audience }}
 
       - name: Mint App token (legacy secrets)
         id: app-token

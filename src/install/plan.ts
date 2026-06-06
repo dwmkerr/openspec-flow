@@ -44,13 +44,19 @@ export interface PlanOptions {
   // dev installs leave this undefined to fall through to the reusable
   // workflow's hardcoded default.
   brokerUrl?: string;
+  // OIDC audience required by the broker at brokerUrl. Bundled with
+  // brokerUrl so each broker target gets the right audience too.
+  brokerAudience?: string;
 }
 
 const WORKFLOW_REL = ".github/workflows/openspec-flow.yml";
 const README_REL = "README.md";
 
 const planWorkflow = (state: FsState, opts: PlanOptions): Action => {
-  const target = renderWorkflow({ brokerUrl: opts.brokerUrl });
+  const target = renderWorkflow({
+    brokerUrl: opts.brokerUrl,
+    brokerAudience: opts.brokerAudience,
+  });
   const abs = path.join(state.cwd, WORKFLOW_REL);
   if (state.workflow === null) {
     return { kind: "write", path: abs, content: target, reason: "creating shim" };
