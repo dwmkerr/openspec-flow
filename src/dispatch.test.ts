@@ -6,16 +6,16 @@ jest.mock("./handlers/registry", () => ({
   dispatchTo: jest.fn(),
 }));
 jest.mock("./handlers/shared/status-comment", () => ({
-  createStatusComment: jest.fn(async () => 4242),
   updateStatusComment: jest.fn(async () => {}),
+}));
+jest.mock("./handlers/shared/sticky-status", () => ({
+  upsertStickyComment: jest.fn(async () => ({ commentId: 4242, created: true })),
 }));
 
 import { runDispatch } from "./dispatch.js";
 import { dispatchTo } from "./handlers/registry.js";
-import {
-  createStatusComment,
-  updateStatusComment,
-} from "./handlers/shared/status-comment.js";
+import { updateStatusComment } from "./handlers/shared/status-comment.js";
+import { upsertStickyComment } from "./handlers/shared/sticky-status.js";
 import type { Intent } from "./intent.js";
 
 const makeOctokit = () => ({
@@ -45,7 +45,7 @@ describe("runDispatch", () => {
 
     await runDispatch(intent, deps);
 
-    expect(createStatusComment).toHaveBeenCalledTimes(1);
+    expect(upsertStickyComment).toHaveBeenCalledTimes(1);
     expect(deps.getToken).not.toHaveBeenCalled();
     expect(dispatchTo).not.toHaveBeenCalled();
   });
