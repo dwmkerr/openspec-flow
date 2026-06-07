@@ -16,7 +16,7 @@ describe("renderLifecycleSticky", () => {
     });
     expect(out).toContain("preparing to create the specification");
     expect(out).toContain("alt=\"working\"");
-    expect(out).toContain("| Spec | preparing |");
+    expect(out).toContain("| Specification | preparing |");
     expect(out).toContain("| Implementation | not started |");
   });
 
@@ -30,7 +30,7 @@ describe("renderLifecycleSticky", () => {
       implementation: { kind: "not-started" },
     });
     expect(out).toContain("is creating the specification");
-    expect(out).toContain("workflow #234");
+    expect(out).toContain("workflow [#234](https://example/r/234)");
     // Headline doesn't carry the link anymore.
     expect(out.match(/is creating the specification\.\s*\n/)).not.toBeNull();
   });

@@ -101,7 +101,7 @@ const prLink = (state: LifecycleStickyState, n: number): string =>
   `[#${n}](${prUrl(state.repo.owner, state.repo.name, n)})`;
 
 const runLink = (run?: ActiveRun): string =>
-  run ? ` in [workflow #${run.number}](${run.url})` : "";
+  run ? ` in workflow [#${run.number}](${run.url})` : "";
 
 const phaseHeading = (phase: "spec" | "implementation"): string =>
   phase === "spec" ? "the specification" : "the implementation";
@@ -142,7 +142,7 @@ const renderTable = (state: LifecycleStickyState): string => {
   return [
     "| Phase | Status |",
     "|---|---|",
-    renderRow("Spec", state.spec, state),
+    renderRow("Specification", state.spec, state),
     renderRow("Implementation", state.implementation, state),
   ].join("\n");
 };
@@ -155,7 +155,7 @@ const completed = (state: LifecycleStickyState): boolean =>
 const headline = (state: LifecycleStickyState): string => {
   if (state.failure) {
     const reason = state.failure.reason ? ` - ${state.failure.reason}` : "";
-    return `⚠️ Run failed during ${state.failure.phase === "spec" ? "spec" : "implementation"}${reason}. Add the \`openspec:go\` label to retry once the cause is fixed.`;
+    return `⚠️ Run failed during ${state.failure.phase === "spec" ? "specification" : "implementation"}${reason}. Add the \`openspec:go\` label to retry once the cause is fixed.`;
   }
 
   if (completed(state)) return "Completed.";
@@ -185,7 +185,7 @@ const headline = (state: LifecycleStickyState): string => {
   // Awaiting review states.
   if (state.spec.kind === "pr-open" && state.implementation.kind === "not-started") {
     const ref = prLink(state, state.spec.prNumber);
-    return `Awaiting review of spec PR ${ref}. Merge it to trigger the implementation, or comment and apply the \`openspec:go\` label on the PR to iterate.`;
+    return `Awaiting review of specification PR ${ref}. Merge it to trigger the implementation, or comment and apply the \`openspec:go\` label on the PR to iterate.`;
   }
   if (state.implementation.kind === "pr-open" && state.spec.kind === "pr-merged") {
     const ref = prLink(state, state.implementation.prNumber);
