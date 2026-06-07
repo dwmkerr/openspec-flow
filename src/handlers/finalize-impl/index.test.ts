@@ -43,12 +43,15 @@ describe("handleFinalizeImpl", () => {
     const octokit = buildOctokit(implBody());
     await handleFinalizeImpl(opts(octokit) as any);
 
-    // GET on issue 59's comments, then POST the lifecycle comment there.
-    const post = octokit.request.mock.calls.find((c: any[]) => c[0].startsWith("POST"));
-    expect(post).toBeDefined();
-    expect(post[1].issue_number).toBe(59);
-    expect(post[1].body).toContain(LIFECYCLE_MARKER);
-    expect(post[1].body).toContain("✅ implemented & merged — #62 (issue closed)");
+    // The handler now double-writes: new lifecycle sticky AND the
+    // legacy lifecycle breadcrumb. Look for the post that carries
+    // the legacy marker specifically.
+    const posts = octokit.request.mock.calls.filter((c: any[]) => c[0].startsWith("POST"));
+    expect(posts.length).toBeGreaterThan(0);
+    const legacyPost = posts.find((c: any[]) => c[1].body.includes(LIFECYCLE_MARKER));
+    expect(legacyPost).toBeDefined();
+    expect(legacyPost[1].issue_number).toBe(59);
+    expect(legacyPost[1].body).toContain("✅ implemented & merged — #62 (issue closed)");
   });
 
   it("skips (no throw) when the impl PR has no metadata block", async () => {

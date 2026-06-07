@@ -1,0 +1,82 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Spec PR iterating from review comments</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@5/github-markdown-light.css" />
+<script src="https://cdn.jsdelivr.net/npm/marked@13/marked.min.js"></script>
+<style>
+  body {
+    margin: 0;
+    padding: 24px;
+    background: #f6f8fa;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    color: #1f2328;
+  }
+  .label {
+    font-size: 12px;
+    color: #57606a;
+    margin-bottom: 12px;
+  }
+  .comment {
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    background: #ffffff;
+    max-width: 960px;
+    overflow: hidden;
+  }
+  .header {
+    padding: 8px 16px;
+    background: #f6f8fa;
+    border-bottom: 1px solid #d0d7de;
+    font-size: 13px;
+    color: #57606a;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6f42c1, #2188ff);
+  }
+  .name {
+    color: #1f2328;
+    font-weight: 600;
+  }
+  .bot-badge {
+    border: 1px solid #d0d7de;
+    border-radius: 12px;
+    padding: 0 6px;
+    font-size: 11px;
+    color: #57606a;
+  }
+  .markdown-body {
+    padding: 16px;
+    box-sizing: border-box;
+    width: 100%;
+  }
+  .markdown-body table {
+    width: auto;
+    min-width: 360px;
+  }
+</style>
+</head>
+<body>
+<div class="label">Spec PR iterating from review comments</div>
+<div class="comment">
+  <div class="header">
+    <div class="avatar"></div>
+    <span class="name">openspec-flow-dev</span>
+    <span class="bot-badge">bot</span>
+    <span>commented now</span>
+  </div>
+  <article class="markdown-body" id="body"></article>
+</div>
+<script>
+  window.__md = "**openspec-flow**\n\n<img src=\"https://raw.githubusercontent.com/dwmkerr/openspec-flow/main/assets/openspec-flow-working.gif\" width=\"24\" align=\"absmiddle\" alt=\"working\" /> openspec-flow is iterating on the specification.\n\n| Phase | Status |\n|---|---|\n| Spec | PR [#137](https://github.com/dwmkerr/livedown/pull/137) - iterating in [workflow #240](https://github.com/dwmkerr/livedown/actions/runs/27071540577) |\n| Implementation | not started |\n\n<div align=\"right\"><sub><a href=\"https://github.com/dwmkerr/openspec-flow\">openspec-flow</a> · <a href=\"https://github.com/dwmkerr/openspec-flow#readme\">docs</a></sub></div>\n\n<!-- openspec-flow:sticky issue=130 -->\n<!-- openspec-flow:sticky-state eyJyZXBvIjp7Im93bmVyIjoiZHdta2VyciIsIm5hbWUiOiJsaXZlZG93biJ9LCJzcGVjIjp7ImtpbmQiOiJwci1pdGVyYXRpbmciLCJwck51bWJlciI6MTM3LCJydW4iOnsibnVtYmVyIjoyNDAsInVybCI6Imh0dHBzOi8vZ2l0aHViLmNvbS9kd21rZXJyL2xpdmVkb3duL2FjdGlvbnMvcnVucy8yNzA3MTU0MDU3NyJ9fSwiaW1wbGVtZW50YXRpb24iOnsia2luZCI6Im5vdC1zdGFydGVkIn19 -->";
+  document.getElementById("body").innerHTML = marked.parse(window.__md);
+</script>
+</body>
+</html>
