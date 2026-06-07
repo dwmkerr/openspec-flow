@@ -10,10 +10,8 @@
 
 import { Intent, describe } from "./intent.js";
 import { dispatchTo } from "./handlers/registry.js";
-import {
-  createStatusComment,
-  updateStatusComment,
-} from "./handlers/shared/status-comment.js";
+import { updateStatusComment } from "./handlers/shared/status-comment.js";
+import { upsertStickyComment } from "./handlers/shared/sticky-status.js";
 import { statusReceived } from "./handlers/shared/status-bodies.js";
 import type { RunAgentLogger } from "./agent/run.js";
 import type { MinimalOctokit } from "./handlers/create-impl/index.js";
@@ -77,20 +75,28 @@ export const runDispatch = async (
     // One sticky status comment per intent. Visible noops are terminal:
     // the body is just the reason. Actionable intents start at "received"
     // and the handler mutates the body as it progresses.
+    //
+    // Upsert by marker — the Probot adapter posts the same body
+    // pre-gate ~30s earlier, so this call usually finds the bot's
+    // comment and edits it (adding the run-link in the process).
+    // Action-mode-only installs find nothing and create instead.
     const body = intent.kind === "noop" ? summary : statusReceived(summary);
 
     let statusCommentId: number | undefined;
     try {
-      statusCommentId = await createStatusComment(
+      const upsert = await upsertStickyComment(
         deps.octokit as any,
         deps.owner,
         deps.repo,
         deps.targetNumber,
+        intent.kind,
         body,
+        { warn: (m: string) => deps.log.warn(m) },
       );
+      statusCommentId = upsert.commentId ?? undefined;
     } catch (err) {
       deps.log.warn(
-        `status comment create failed; handler will run without upsert: ${(err as Error).message}`,
+        `status comment upsert failed; handler will run without upsert: ${(err as Error).message}`,
       );
     }
 

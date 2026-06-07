@@ -5,6 +5,8 @@ import { dispatchMode } from "./config.js";
 import { runAppInit } from "./app-install/index.js";
 import { addEyes, removeEyes } from "./reactions.js";
 import { upsertImplBreadcrumb } from "./handlers/shared/issue-breadcrumb.js";
+import { upsertStickyComment } from "./handlers/shared/sticky-status.js";
+import { statusReceived } from "./handlers/shared/status-bodies.js";
 import { handleTokenRequest } from "./oidc-broker/route.js";
 import type { InstallationTokenIssuer } from "./oidc-broker/index.js";
 import express from "express";
@@ -67,6 +69,13 @@ export default (app: Probot, options: AppOptions = {}): void => {
       // started; the workflow's create-impl handler upserts the same
       // marker later with the run link + progress states.
       await maybeBreadcrumbImplStart(intent, context);
+
+      // Sticky status comment pre-gate. Workflow's runDispatch upserts
+      // the same marker ~30s later when the runner spins up. Without
+      // this pre-gate post, the target issue/PR sits silent during
+      // runner spinup; with it, the user sees `openspec-flow received:
+      // <intent>. Starting…` within ~1s of labeling.
+      await maybeAddStickyReceived(intent, context);
 
       // In-proc event dispatch is dev-only. In `action` mode the shim
       // workflow in the user's repo handles these events; Probot
@@ -187,8 +196,37 @@ const buildBrokerIssuer = (app: Probot): InstallationTokenIssuer => ({
 });
 
 // Intents that originate from a user adding `openspec:go` — the only
-// trigger we want to acknowledge with 👀.
+// trigger we want to acknowledge with 👀. Same allowlist is used for
+// the bot-pre-gate sticky comment (create-impl is added separately
+// because its sticky lives on the spec PR, which is also the merge
+// event's target — same gating predicate, different intent kind).
 const eyeAckIntents = new Set(["create-spec", "iterate-spec", "iterate-impl"]);
+const stickyPreGateIntents = new Set([
+  "create-spec",
+  "iterate-spec",
+  "iterate-impl",
+  "create-impl",
+]);
+
+const maybeAddStickyReceived = async (
+  intent: Intent,
+  context: Context<(typeof EVENTS)[number]>,
+): Promise<void> => {
+  if (!stickyPreGateIntents.has(intent.kind)) return;
+  const num = targetNumber(context.payload);
+  if (num === null) return;
+  const summary = describe(intent);
+  const body = statusReceived(summary);
+  await upsertStickyComment(
+    context.octokit as any,
+    context.repo().owner,
+    context.repo().repo,
+    num,
+    intent.kind,
+    body,
+    { warn: (m: string) => context.log.warn(m) },
+  );
+};
 
 const maybeBreadcrumbImplStart = async (
   intent: Intent,
