@@ -13,3 +13,13 @@ export const branchSlug = (title: string, maxLen = 50): string => {
 
 export const branchName = (issueNumber: number, title: string): string =>
   `chore/${issueNumber}-${branchSlug(title)}`;
+
+// Deterministic change name threaded into the agent prompt so the
+// harness knows which directory under openspec/changes/ to read
+// after the run. Prevents the picker from picking an alphabetically-
+// first stale orphan change when one is present in the user's repo.
+// Prefix `issue-N-` disambiguates two issues with similar titles.
+export const expectedChangeName = (
+  issueNumber: number,
+  title: string,
+): string => `issue-${issueNumber}-${branchSlug(title)}`;
