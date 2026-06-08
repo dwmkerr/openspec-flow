@@ -16,6 +16,11 @@ import {
 } from "../create-spec/git.js";
 import { parseImplPrMetadata } from "../shared/impl-pr-metadata.js";
 import { updateStatusComment } from "../shared/status-comment.js";
+import { mutateLifecycleStickyEverywhere } from "../shared/lifecycle-sticky.js";
+import { currentRun } from "../shared/run-link.js";
+
+const appInstalled = (): boolean =>
+  process.env.OPENSPEC_FLOW_APP_INSTALLED === "true";
 import {
   statusReadingPr,
   statusPushing,
@@ -89,6 +94,38 @@ export const handleIterateImpl = async (
 
     const branch = pr.data.head.ref;
     const { change: changeName, issue: issueNumber } = meta;
+
+    // Tell the lifecycle sticky: impl PR iterating in workflow #N.
+    {
+      const run = currentRun() ?? undefined;
+      const prsForSticky = meta.specPr !== undefined
+        ? [meta.specPr, opts.implPrNumber]
+        : [opts.implPrNumber];
+      await mutateLifecycleStickyEverywhere(
+        opts.octokit as any,
+        opts.owner,
+        opts.repo,
+        { issueNumber, prNumbers: prsForSticky },
+        {
+          repo: { owner: opts.owner, name: opts.repo },
+          spec:
+            meta.specPr !== undefined
+              ? { kind: "pr-merged", prNumber: meta.specPr }
+              : { kind: "not-started" },
+          implementation: { kind: "pr-iterating", prNumber: opts.implPrNumber, run },
+        },
+        (s) => ({
+          ...s,
+          implementation: {
+            kind: "pr-iterating",
+            prNumber: opts.implPrNumber,
+            run,
+          },
+        }),
+        { appInstalled: appInstalled() },
+        { warn: opts.log.warn },
+      );
+    }
 
     workdir = createWorkdir(opts.implPrNumber);
     opts.log.info(`iterate-impl: workdir=${workdir} branch=${branch}`);
