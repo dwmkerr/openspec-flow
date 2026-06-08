@@ -27,7 +27,10 @@ import {
 import { summariseProposal } from "../create-spec/changes.js";
 import { parseSpecPrMetadata } from "../shared/spec-pr-metadata.js";
 import { updateStatusComment } from "../shared/status-comment.js";
-import { mutateLifecycleSticky } from "../shared/lifecycle-sticky.js";
+import { mutateLifecycleStickyEverywhere } from "../shared/lifecycle-sticky.js";
+
+const appInstalled = (): boolean =>
+  process.env.OPENSPEC_FLOW_APP_INSTALLED === "true";
 import {
   statusImplementing,
   statusPushing,
@@ -251,12 +254,17 @@ export const handleCreateImpl = async (
     // (spec merged + impl opened). Best-effort. resolvedIssue comes
     // from the spec-PR metadata when not passed directly.
     if (resolvedIssue !== undefined) {
-      // New lifecycle sticky — single source of truth for the issue.
-      await mutateLifecycleSticky(
+      // Mutate sticky on the issue + mirror to both PRs (spec PR
+      // already merged but the comment thread still benefits from
+      // the consolidated view) + the new impl PR.
+      await mutateLifecycleStickyEverywhere(
         opts.octokit as any,
         opts.owner,
         opts.repo,
-        resolvedIssue,
+        {
+          issueNumber: resolvedIssue,
+          prNumbers: [opts.specPrNumber, pr.data.number],
+        },
         {
           repo: { owner: opts.owner, name: opts.repo },
           spec: { kind: "pr-merged", prNumber: opts.specPrNumber },
@@ -267,6 +275,7 @@ export const handleCreateImpl = async (
           spec: { kind: "pr-merged", prNumber: opts.specPrNumber },
           implementation: { kind: "pr-open", prNumber: pr.data.number },
         }),
+        { appInstalled: appInstalled() },
         { warn: opts.log.warn },
       );
 
@@ -289,11 +298,12 @@ export const handleCreateImpl = async (
     // the issue thread reflects the terminal state (the sticky
     // status comment lives on the spec PR, not the issue).
     if (resolvedIssue !== undefined) {
-      await mutateLifecycleSticky(
+      const failurePrs = implPrNumber !== null ? [opts.specPrNumber, implPrNumber] : [opts.specPrNumber];
+      await mutateLifecycleStickyEverywhere(
         opts.octokit as any,
         opts.owner,
         opts.repo,
-        resolvedIssue,
+        { issueNumber: resolvedIssue, prNumbers: failurePrs },
         {
           repo: { owner: opts.owner, name: opts.repo },
           spec: { kind: "pr-merged", prNumber: opts.specPrNumber },
@@ -304,6 +314,7 @@ export const handleCreateImpl = async (
           implementation: { kind: "failed" },
           failure: { phase: "implementation", reason: msg },
         }),
+        { appInstalled: appInstalled() },
         { warn: opts.log.warn },
       );
     }

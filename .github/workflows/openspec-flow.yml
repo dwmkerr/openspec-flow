@@ -149,3 +149,8 @@ jobs:
           OPENSPEC_FLOW_TOKEN: ${{ steps.broker-token.outputs.token || steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ steps.broker-token.outputs.token || steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # True when either the broker minted an installation token
+          # or the legacy App-secret path produced one. Surfaces in
+          # the lifecycle sticky's footer — when false, the comment
+          # carries an install hint pointing at the App.
+          OPENSPEC_FLOW_APP_INSTALLED: ${{ (steps.broker-token.outputs.token != '' || steps.app-token.outputs.token != '') && 'true' || 'false' }}

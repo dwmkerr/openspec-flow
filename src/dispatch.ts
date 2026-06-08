@@ -72,32 +72,33 @@ export const runDispatch = async (
   await addEyes(deps.octokit as any, deps.owner, deps.repo, deps.targetNumber, deps.log);
 
   try {
-    // One sticky status comment per intent. Visible noops are terminal:
-    // the body is just the reason. Actionable intents start at "received"
-    // and the handler mutates the body as it progresses.
-    //
-    // Upsert by marker — the Probot adapter posts the same body
-    // pre-gate ~30s earlier, so this call usually finds the bot's
-    // comment and edits it (adding the run-link in the process).
-    // Action-mode-only installs find nothing and create instead.
+    // Per-target sticky status comment carries fine-grained agent
+    // progress on the target (PR thread for iterate-*, create-impl).
+    // For `create-spec` the target IS the originating issue, where the
+    // lifecycle sticky (posted pre-gate by the Probot adapter, mutated
+    // by handlers) already covers state. Posting a second status
+    // comment on the same issue would be a duplicate, so skip.
+    const targetIsOriginatingIssue = intent.kind === "create-spec";
     const body = intent.kind === "noop" ? summary : statusReceived(summary);
 
     let statusCommentId: number | undefined;
-    try {
-      const upsert = await upsertStickyComment(
-        deps.octokit as any,
-        deps.owner,
-        deps.repo,
-        deps.targetNumber,
-        intent.kind,
-        body,
-        { warn: (m: string) => deps.log.warn(m) },
-      );
-      statusCommentId = upsert.commentId ?? undefined;
-    } catch (err) {
-      deps.log.warn(
-        `status comment upsert failed; handler will run without upsert: ${(err as Error).message}`,
-      );
+    if (!targetIsOriginatingIssue) {
+      try {
+        const upsert = await upsertStickyComment(
+          deps.octokit as any,
+          deps.owner,
+          deps.repo,
+          deps.targetNumber,
+          intent.kind,
+          body,
+          { warn: (m: string) => deps.log.warn(m) },
+        );
+        statusCommentId = upsert.commentId ?? undefined;
+      } catch (err) {
+        deps.log.warn(
+          `status comment upsert failed; handler will run without upsert: ${(err as Error).message}`,
+        );
+      }
     }
 
     // Visible-noop intents are terminal: the sticky comment carries the
