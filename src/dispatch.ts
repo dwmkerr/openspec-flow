@@ -8,11 +8,8 @@
 // — never on Probot's Context. The silent-noop log shortcut stays in
 // each adapter (it's a per-adapter logging concern).
 
-import { Intent, describe } from "./intent.js";
+import { Intent } from "./intent.js";
 import { dispatchTo } from "./handlers/registry.js";
-import { updateStatusComment } from "./handlers/shared/status-comment.js";
-import { upsertStickyComment } from "./handlers/shared/sticky-status.js";
-import { statusReceived } from "./handlers/shared/status-bodies.js";
 import type { RunAgentLogger } from "./agent/run.js";
 import type { MinimalOctokit } from "./handlers/create-impl/index.js";
 import { addEyes, removeEyes } from "./reactions.js";
@@ -65,44 +62,14 @@ export const runDispatch = async (
   intent: Intent,
   deps: DispatchDeps,
 ): Promise<DispatchResult> => {
-  const summary = describe(intent);
-
   // Eyes reaction is the fast deterministic ack — best-effort, never
   // blocks the comment that follows.
   await addEyes(deps.octokit as any, deps.owner, deps.repo, deps.targetNumber, deps.log);
 
   try {
-    // Per-target sticky status comment carries fine-grained agent
-    // progress on the target (PR thread for iterate-*, create-impl).
-    // For `create-spec` the target IS the originating issue, where the
-    // lifecycle sticky (posted pre-gate by the Probot adapter, mutated
-    // by handlers) already covers state. Posting a second status
-    // comment on the same issue would be a duplicate, so skip.
-    const targetIsOriginatingIssue = intent.kind === "create-spec";
-    const body = intent.kind === "noop" ? summary : statusReceived(summary);
-
-    let statusCommentId: number | undefined;
-    if (!targetIsOriginatingIssue) {
-      try {
-        const upsert = await upsertStickyComment(
-          deps.octokit as any,
-          deps.owner,
-          deps.repo,
-          deps.targetNumber,
-          intent.kind,
-          body,
-          { warn: (m: string) => deps.log.warn(m) },
-        );
-        statusCommentId = upsert.commentId ?? undefined;
-      } catch (err) {
-        deps.log.warn(
-          `status comment upsert failed; handler will run without upsert: ${(err as Error).message}`,
-        );
-      }
-    }
-
-    // Visible-noop intents are terminal: the sticky comment carries the
-    // reason and there's no handler to run.
+    // Visible-noop intents are terminal: the lifecycle sticky on the
+    // target was already updated by the Probot pre-gate (or will be
+    // by the workflow handler). No per-target comment to post here.
     if (intent.kind === "noop") return { ok: true };
 
     try {
@@ -115,26 +82,16 @@ export const runDispatch = async (
         octokit: deps.octokit,
         gitPushToken: token,
         log: deps.log,
-        statusCommentId,
+        // statusCommentId removed — handlers now mutate the lifecycle
+        // sticky directly via mutateLifecycleStickyEverywhere.
+        statusCommentId: undefined,
         statusTargetNumber: deps.targetNumber,
       });
 
       if (!result.dispatched) {
-        // Classified intent has no handler yet. Surface it on the sticky
-        // status comment so the reviewer doesn't see "Starting…" hang.
-        // This is a misconfiguration, not a transient failure — bubble
-        // it as ok=false so the run goes red.
+        // Classified intent has no handler yet. Surfaced as a warn +
+        // ok=false so the run goes red.
         deps.log.warn(`intent ${result.kind} classified but not implemented`);
-        if (statusCommentId !== undefined) {
-          await updateStatusComment(
-            deps.octokit as any,
-            deps.owner,
-            deps.repo,
-            statusCommentId,
-            `❌ \`${result.kind}\` is classified but not implemented yet — manage manually.`,
-            { warn: (m: string) => deps.log.warn(m) },
-          );
-        }
         return {
           ok: false,
           error: new Error(`intent ${result.kind} not implemented`),

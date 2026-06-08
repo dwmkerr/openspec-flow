@@ -17,18 +17,11 @@ import {
   pushBranch,
 } from "../create-spec/git.js";
 import { parseSpecPrMetadata } from "../shared/spec-pr-metadata.js";
-import { updateStatusComment } from "../shared/status-comment.js";
 import { mutateLifecycleStickyEverywhere } from "../shared/lifecycle-sticky.js";
 import { currentRun } from "../shared/run-link.js";
 
 const appInstalled = (): boolean =>
   process.env.OPENSPEC_FLOW_APP_INSTALLED === "true";
-import {
-  statusReadingPr,
-  statusPushing,
-  statusSpecUpdated,
-  statusFailure,
-} from "../shared/status-bodies.js";
 import { verifyIterateWorkdir } from "./verify.js";
 import type { MinimalOctokit } from "../create-impl/index.js";
 
@@ -63,16 +56,34 @@ export const handleIterateSpec = async (
 
   let workdir = "";
 
-  const statusLog = { warn: opts.log.warn };
-  const setStatus = (body: string) =>
-    updateStatusComment(
+  // Issue number resolved from PR metadata below; setSpecStep guards
+  // on it (no-op until resolved). Captures the run id so the row's
+  // workflow link stays consistent across step transitions.
+  let resolvedIssue: number | undefined;
+  const setSpecStep = async (step: string) => {
+    if (resolvedIssue === undefined) return;
+    const r = currentRun() ?? undefined;
+    await mutateLifecycleStickyEverywhere(
       opts.octokit as any,
       opts.owner,
       opts.repo,
-      opts.statusCommentId,
-      body,
-      statusLog,
+      { issueNumber: resolvedIssue, prNumbers: [opts.specPrNumber] },
+      {
+        repo: { owner: opts.owner, name: opts.repo },
+        spec: { kind: "pr-iterating", prNumber: opts.specPrNumber, run: r, step },
+        implementation: { kind: "not-started" },
+      },
+      (s) => ({
+        ...s,
+        spec:
+          s.spec.kind === "pr-iterating"
+            ? { ...s.spec, step, run: s.spec.run ?? r }
+            : { kind: "pr-iterating", prNumber: opts.specPrNumber, run: r, step },
+      }),
+      { appInstalled: appInstalled() },
+      { warn: opts.log.warn },
     );
+  };
 
   try {
     opts.log.info(`iterate-spec: starting for spec PR #${opts.specPrNumber}`);
@@ -96,6 +107,7 @@ export const handleIterateSpec = async (
 
     const branch = pr.data.head.ref;
     const { change: changeName, issue: issueNumber } = meta;
+    resolvedIssue = issueNumber;
 
     // Tell the lifecycle sticky: spec PR iterating in workflow #N.
     {
@@ -137,7 +149,7 @@ export const handleIterateSpec = async (
       repo: `${opts.owner}/${opts.repo}`,
     });
 
-    await setStatus(statusReadingPr(opts.specPrNumber));
+    await setSpecStep("gathering review context");
 
     const headBefore = headSha(workdir);
 
@@ -164,17 +176,58 @@ export const handleIterateSpec = async (
     }
     opts.log.info(`iterate-spec: workdir verified — change updated, committed`);
 
-    await setStatus(statusPushing());
+    await setSpecStep("pushing");
 
     pushBranch(workdir, branch);
     opts.log.info(`iterate-spec: pushed ${branch}`);
 
-    await setStatus(statusSpecUpdated());
+    // Iteration finished — flip back to pr-open so the sticky stops
+    // showing "iterating in workflow #N" and reads as awaiting review
+    // again. Mirrors to the spec PR.
+    if (resolvedIssue !== undefined) {
+      await mutateLifecycleStickyEverywhere(
+        opts.octokit as any,
+        opts.owner,
+        opts.repo,
+        { issueNumber: resolvedIssue, prNumbers: [opts.specPrNumber] },
+        {
+          repo: { owner: opts.owner, name: opts.repo },
+          spec: { kind: "pr-open", prNumber: opts.specPrNumber },
+          implementation: { kind: "not-started" },
+        },
+        (s) => ({
+          ...s,
+          spec: { kind: "pr-open", prNumber: opts.specPrNumber },
+        }),
+        { appInstalled: appInstalled() },
+        { warn: opts.log.warn },
+      );
+    }
 
     opts.log.info(`iterate-spec: done`);
   } catch (err) {
     const msg = (err as Error).message;
-    await setStatus(statusFailure(msg));
+    if (resolvedIssue !== undefined) {
+      const failureRun = currentRun() ?? undefined;
+      await mutateLifecycleStickyEverywhere(
+        opts.octokit as any,
+        opts.owner,
+        opts.repo,
+        { issueNumber: resolvedIssue, prNumbers: [opts.specPrNumber] },
+        {
+          repo: { owner: opts.owner, name: opts.repo },
+          spec: { kind: "failed" },
+          implementation: { kind: "not-started" },
+        },
+        (s) => ({
+          ...s,
+          spec: { kind: "failed" },
+          failure: { phase: "spec", reason: msg, run: failureRun },
+        }),
+        { appInstalled: appInstalled() },
+        { warn: opts.log.warn },
+      );
+    }
     throw err;
   } finally {
     if (workdir) removeWorkdir(workdir);

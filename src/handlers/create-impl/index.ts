@@ -26,18 +26,11 @@ import {
 } from "../create-spec/git.js";
 import { summariseProposal } from "../create-spec/changes.js";
 import { parseSpecPrMetadata } from "../shared/spec-pr-metadata.js";
-import { updateStatusComment } from "../shared/status-comment.js";
 import { mutateLifecycleStickyEverywhere } from "../shared/lifecycle-sticky.js";
 import { currentRun } from "../shared/run-link.js";
 
 const appInstalled = (): boolean =>
   process.env.OPENSPEC_FLOW_APP_INSTALLED === "true";
-import {
-  statusImplementing,
-  statusPushing,
-  statusImplPrOpened,
-  statusFailure,
-} from "../shared/status-bodies.js";
 import { verifyImplWorkdir } from "./verify.js";
 import type { MinimalOctokit as SpecMinimalOctokit } from "../create-spec/index.js";
 
@@ -95,20 +88,6 @@ const buildImplPrBody = (opts: {
   return `${head}\n\nCloses #${opts.issueNumber}.\n\n<!-- openspec-flow:auto-maintained — do not remove or edit\nissue: ${opts.issueNumber}\nkind: impl\nchange: ${opts.changeName}\nspec-pr: ${opts.specPrNumber}\n-->\n`;
 };
 
-const safeComment = async (
-  octokit: MinimalOctokit,
-  owner: string,
-  repo: string,
-  issueNumber: number,
-  body: string,
-): Promise<void> => {
-  try {
-    await octokit.issues.createComment({ owner, repo, issue_number: issueNumber, body });
-  } catch {
-    // Swallow: comments are best-effort; the PR is the substantive artefact.
-  }
-};
-
 export const handleCreateImpl = async (
   opts: HandleCreateImplOpts,
 ): Promise<{ prNumber: number; prUrl: string } | null> => {
@@ -119,16 +98,32 @@ export const handleCreateImpl = async (
   let implPrNumber: number | null = null;
   let resolvedIssue = opts.issueNumber;
 
-  const statusLog = { warn: opts.log.warn };
-  const setStatus = (body: string) =>
-    updateStatusComment(
+  // Set the agent's current sub-step on the lifecycle sticky's
+  // Implementation row. Mirrors to issue + spec PR (always known).
+  const setImplStep = async (step: string) => {
+    if (resolvedIssue === undefined) return;
+    const r = currentRun() ?? undefined;
+    await mutateLifecycleStickyEverywhere(
       opts.octokit as any,
       opts.owner,
       opts.repo,
-      opts.statusCommentId,
-      body,
-      statusLog,
+      { issueNumber: resolvedIssue, prNumbers: [opts.specPrNumber] },
+      {
+        repo: { owner: opts.owner, name: opts.repo },
+        spec: { kind: "pr-merged", prNumber: opts.specPrNumber },
+        implementation: { kind: "creating", run: r, step },
+      },
+      (s) => ({
+        ...s,
+        implementation:
+          s.implementation.kind === "creating"
+            ? { ...s.implementation, step, run: s.implementation.run ?? r }
+            : { kind: "creating", run: r, step },
+      }),
+      { appInstalled: appInstalled() },
+      { warn: opts.log.warn },
     );
+  };
 
   try {
     opts.log.info(`create-impl: starting (${opts.mode}) for spec PR #${opts.specPrNumber}`);
@@ -205,7 +200,7 @@ export const handleCreateImpl = async (
       repo: `${opts.owner}/${opts.repo}`,
     });
 
-    await setStatus(statusImplementing(changeName, resolvedIssue));
+    await setImplStep(`implementing change ${changeName}`);
 
     const headBefore = headSha(workdir);
 
@@ -232,7 +227,7 @@ export const handleCreateImpl = async (
     }
     opts.log.info(`create-impl: workdir verified — change archived, committed`);
 
-    await setStatus(statusPushing());
+    await setImplStep("pushing");
 
     pushBranch(workdir, branch);
     opts.log.info(`create-impl: pushed ${branch}`);
@@ -269,8 +264,6 @@ export const handleCreateImpl = async (
       labels: ["openspec:impl"],
     });
 
-    await setStatus(statusImplPrOpened(pr.data.number));
-
     // Advance the issue lifecycle breadcrumb on the originating issue
     // (spec merged + impl opened). Best-effort. resolvedIssue comes
     // from the spec-PR metadata when not passed directly.
@@ -306,18 +299,10 @@ export const handleCreateImpl = async (
     return { prNumber: pr.data.number, prUrl: pr.data.html_url };
   } catch (err) {
     const msg = (err as Error).message;
-    const failure = statusFailure(msg);
-    await setStatus(failure);
-    // If the failure occurred AFTER the impl PR was already opened,
-    // also drop a comment on the impl PR itself — the status comment
-    // lives on the originating issue / spec PR, and the impl PR
-    // reviewer otherwise wouldn't see the failure context.
-    if (implPrNumber !== null) {
-      await safeComment(opts.octokit, opts.owner, opts.repo, implPrNumber, failure);
-    }
-    // Mirror the failure onto the originating issue's breadcrumb so
-    // the issue thread reflects the terminal state (the sticky
-    // status comment lives on the spec PR, not the issue).
+    // Failure surfaces on the lifecycle sticky (mirrored to issue +
+    // spec PR + impl PR if opened). The reviewer of any of those
+    // threads sees the warning in the same comment they were
+    // tracking.
     if (resolvedIssue !== undefined) {
       const failurePrs = implPrNumber !== null ? [opts.specPrNumber, implPrNumber] : [opts.specPrNumber];
       await mutateLifecycleStickyEverywhere(

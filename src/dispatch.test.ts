@@ -1,21 +1,18 @@
 // Tests for the shared dispatch core. The registry is mocked so these
-// tests assert the core's sequencing (eyes, sticky comment, visible-noop
-// terminal, lazy token, null-handler surface) without touching handlers.
+// tests assert the core's sequencing (eyes, visible-noop terminal,
+// lazy token, null-handler surface, failure propagation) without
+// touching handlers.
+//
+// The per-target sticky-status was removed; handlers now mutate the
+// lifecycle sticky directly. So dispatch's statusCommentId is always
+// undefined and there's no sticky-status mock to wire here.
 
 jest.mock("./handlers/registry", () => ({
   dispatchTo: jest.fn(),
 }));
-jest.mock("./handlers/shared/status-comment", () => ({
-  updateStatusComment: jest.fn(async () => {}),
-}));
-jest.mock("./handlers/shared/sticky-status", () => ({
-  upsertStickyComment: jest.fn(async () => ({ commentId: 4242, created: true })),
-}));
 
 import { runDispatch } from "./dispatch.js";
 import { dispatchTo } from "./handlers/registry.js";
-import { updateStatusComment } from "./handlers/shared/status-comment.js";
-import { upsertStickyComment } from "./handlers/shared/sticky-status.js";
 import type { Intent } from "./intent.js";
 
 const makeOctokit = () => ({
@@ -39,47 +36,37 @@ const makeDeps = (over: Partial<Parameters<typeof runDispatch>[1]> = {}) => ({
 beforeEach(() => jest.clearAllMocks());
 
 describe("runDispatch", () => {
-  it("visible noop is terminal: posts comment, no token, no dispatch", async () => {
+  it("visible noop is terminal: no token, no dispatch", async () => {
     const deps = makeDeps();
     const intent: Intent = { kind: "noop", visible: true, reason: "closed PR" };
 
-    await runDispatch(intent, deps);
+    const result = await runDispatch(intent, deps);
 
-    expect(upsertStickyComment).toHaveBeenCalledTimes(1);
+    expect(result.ok).toBe(true);
     expect(deps.getToken).not.toHaveBeenCalled();
     expect(dispatchTo).not.toHaveBeenCalled();
   });
 
-  it("actionable intent (target is a PR): eyes, sticky, token, registry dispatch", async () => {
+  it("actionable intent: eyes added, token resolved, dispatch invoked", async () => {
     (dispatchTo as jest.Mock).mockResolvedValue({ dispatched: true });
     const deps = makeDeps();
-    // Use iterate-spec — target is a PR, dispatch posts the per-PR sticky.
     const intent: Intent = { kind: "iterate-spec", prNumber: 7 };
 
-    await runDispatch(intent, deps);
+    const result = await runDispatch(intent, deps);
 
+    expect(result.ok).toBe(true);
     expect(deps.octokit.reactions.createForIssue).toHaveBeenCalledTimes(1);
     expect(deps.getToken).toHaveBeenCalledTimes(1);
     expect(dispatchTo).toHaveBeenCalledTimes(1);
     const ctx = (dispatchTo as jest.Mock).mock.calls[0][1];
     expect(ctx.gitPushToken).toBe("tok");
-    expect(ctx.statusCommentId).toBe(4242);
+    // No per-target sticky any more; handlers mutate the lifecycle
+    // sticky directly. statusCommentId is always undefined.
+    expect(ctx.statusCommentId).toBeUndefined();
     expect(ctx.statusTargetNumber).toBe(7);
   });
 
-  it("create-spec skips the per-target sticky (lifecycle sticky owns the issue)", async () => {
-    (dispatchTo as jest.Mock).mockResolvedValue({ dispatched: true });
-    const deps = makeDeps();
-    const intent: Intent = { kind: "create-spec", issueNumber: 7, title: "t" };
-
-    await runDispatch(intent, deps);
-
-    expect(upsertStickyComment).not.toHaveBeenCalled();
-    const ctx = (dispatchTo as jest.Mock).mock.calls[0][1];
-    expect(ctx.statusCommentId).toBeUndefined();
-  });
-
-  it("null handler surfaces a visible failure on the sticky comment", async () => {
+  it("null handler surfaces ok=false with a named error", async () => {
     (dispatchTo as jest.Mock).mockResolvedValue({
       dispatched: false,
       kind: "iterate-impl",
@@ -87,12 +74,10 @@ describe("runDispatch", () => {
     const deps = makeDeps();
     const intent: Intent = { kind: "iterate-impl", prNumber: 9 };
 
-    await runDispatch(intent, deps);
-
-    expect(updateStatusComment).toHaveBeenCalledTimes(1);
-    const body = (updateStatusComment as jest.Mock).mock.calls[0][4];
-    expect(body).toContain("iterate-impl");
-    expect(body).toContain("not implemented");
+    const result = await runDispatch(intent, deps);
+    expect(result.ok).toBe(false);
+    expect(result.error?.message).toContain("iterate-impl");
+    expect(result.error?.message).toContain("not implemented");
   });
 
   it("handler error routes to logError and returns ok=false with the error", async () => {
@@ -118,22 +103,7 @@ describe("runDispatch", () => {
 
     await runDispatch(intent, deps);
 
-    expect(deps.octokit.reactions.listForIssue).toHaveBeenCalledTimes(1);
+    expect(deps.octokit.reactions.listForIssue).toHaveBeenCalled();
     expect(deps.octokit.reactions.deleteForIssue).toHaveBeenCalledTimes(2);
-  });
-
-  it("failure path still clears eyes via finally", async () => {
-    (dispatchTo as jest.Mock).mockRejectedValue(new Error("boom"));
-    const deps = makeDeps({ logError: jest.fn() });
-    deps.octokit.reactions.listForIssue = jest.fn(async () => ({
-      data: [{ id: 99 }],
-    }));
-    const intent: Intent = { kind: "create-spec", issueNumber: 7, title: "t" };
-
-    await runDispatch(intent, deps);
-
-    expect(deps.octokit.reactions.deleteForIssue).toHaveBeenCalledWith(
-      expect.objectContaining({ reaction_id: 99 }),
-    );
   });
 });

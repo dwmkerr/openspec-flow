@@ -44,9 +44,12 @@ const buildOctokit = () => ({
     createComment: jest.fn().mockResolvedValue({}),
     addLabels: jest.fn().mockResolvedValue({}),
   },
-  // Raw request() is what the status-comment helper uses for the
-  // PATCH /issues/comments/{id} milestone updates.
-  request: jest.fn().mockResolvedValue({ data: {} }),
+  // Route-aware: GET comments → []; POST/PATCH → { id: 1 }. The
+  // lifecycle sticky mutator lists comments first (looking for an
+  // existing sticky), then POSTs a new one when none is found.
+  request: jest.fn(async (route: string) =>
+    route.startsWith("GET") ? { data: [] } : { data: { id: 1 } },
+  ),
   pulls: {
     create: jest.fn().mockResolvedValue({
       data: { number: 99, html_url: "https://github.com/o/r/pull/99" },
@@ -115,16 +118,17 @@ describe("handleCreateSpec", () => {
     expect(opts.octokit.issues.addLabels).toHaveBeenCalledWith(
       expect.objectContaining({ labels: ["openspec:spec"] }),
     );
-    // Status comment was PATCHed at milestones AND at the terminal
-    // success state. No separate createComment was posted.
-    const patchCalls = opts.octokit.request.mock.calls.filter(
-      (c: any) => c[0].startsWith("PATCH /repos/"),
+    // Lifecycle sticky written via the issue-comments endpoint.
+    // The terminal write carries the open spec PR row.
+    const posts = opts.octokit.request.mock.calls.filter(
+      (c: any) => c[0].startsWith("POST"),
     );
-    expect(patchCalls.length).toBeGreaterThanOrEqual(1);
-    const finalPatch = patchCalls[patchCalls.length - 1];
-    expect(finalPatch[1].comment_id).toBe(555);
-    expect(finalPatch[1].body).toBe("✅ spec PR opened: #99");
-    expect(opts.octokit.issues.createComment).not.toHaveBeenCalled();
+    const finalPost = posts
+      .map((c: any) => c[1])
+      .find((p: any) => String(p.body).includes("PR [#99]"));
+    expect(finalPost).toBeDefined();
+    expect(finalPost.body).toContain("PR [#99]");
+    expect(finalPost.body).toContain("- open");
     expect(removeWorkdir).toHaveBeenCalledWith("/tmp/openspec-flow/test-wd");
   });
 
@@ -158,13 +162,15 @@ describe("handleCreateSpec", () => {
     );
     expect(pushBranch).not.toHaveBeenCalled();
     expect(opts.octokit.pulls.create).not.toHaveBeenCalled();
-    // Failure terminal-state PATCHes the status comment, no new POST.
-    const patchCalls = opts.octokit.request.mock.calls.filter(
-      (c: any) => c[0].startsWith("PATCH /repos/"),
+    // Lifecycle sticky terminal failure write — body contains the
+    // warning sigil + reason. Posted via the issue-comments endpoint.
+    const writes = opts.octokit.request.mock.calls.filter(
+      (c: any) => c[0].startsWith("POST") || c[0].startsWith("PATCH"),
     );
-    const finalPatch = patchCalls[patchCalls.length - 1];
-    expect(finalPatch[1].body).toContain("⚠️ openspec-flow failed");
-    expect(opts.octokit.issues.createComment).not.toHaveBeenCalled();
+    const failureWrite = writes
+      .map((c: any) => c[1])
+      .find((p: any) => String(p.body).includes("⚠️ Run failed"));
+    expect(failureWrite).toBeDefined();
   });
 
   it("aborts and posts failure comment when agent produces no change", async () => {
@@ -175,13 +181,15 @@ describe("handleCreateSpec", () => {
       "agent didn't create any openspec changes",
     );
     expect(opts.octokit.pulls.create).not.toHaveBeenCalled();
-    // Failure terminal-state PATCHes the status comment, no new POST.
-    const patchCalls = opts.octokit.request.mock.calls.filter(
-      (c: any) => c[0].startsWith("PATCH /repos/"),
+    // Lifecycle sticky terminal failure write — body contains the
+    // warning sigil + reason. Posted via the issue-comments endpoint.
+    const writes = opts.octokit.request.mock.calls.filter(
+      (c: any) => c[0].startsWith("POST") || c[0].startsWith("PATCH"),
     );
-    const finalPatch = patchCalls[patchCalls.length - 1];
-    expect(finalPatch[1].body).toContain("⚠️ openspec-flow failed");
-    expect(opts.octokit.issues.createComment).not.toHaveBeenCalled();
+    const failureWrite = writes
+      .map((c: any) => c[1])
+      .find((p: any) => String(p.body).includes("⚠️ Run failed"));
+    expect(failureWrite).toBeDefined();
     expect(removeWorkdir).toHaveBeenCalled();
   });
 
@@ -193,10 +201,13 @@ describe("handleCreateSpec", () => {
 
     await expect(handleCreateSpec(opts)).rejects.toThrow("openspec-new-change skill");
     expect(opts.runner).not.toHaveBeenCalled();
-    const patchCalls = opts.octokit.request.mock.calls.filter(
-      (c: any) => c[0].startsWith("PATCH /repos/"),
+    const writes = opts.octokit.request.mock.calls.filter(
+      (c: any) => c[0].startsWith("POST") || c[0].startsWith("PATCH"),
     );
-    expect(patchCalls[patchCalls.length - 1][1].body).toContain("openspec-new-change skill");
+    const failureWrite = writes
+      .map((c: any) => c[1])
+      .find((p: any) => String(p.body).includes("openspec-new-change skill"));
+    expect(failureWrite).toBeDefined();
   });
 
   it("posts failure comment when agent throws", async () => {
@@ -205,10 +216,13 @@ describe("handleCreateSpec", () => {
     });
 
     await expect(handleCreateSpec(opts)).rejects.toThrow("api down");
-    const patchCalls = opts.octokit.request.mock.calls.filter(
-      (c: any) => c[0].startsWith("PATCH /repos/"),
+    const writes = opts.octokit.request.mock.calls.filter(
+      (c: any) => c[0].startsWith("POST") || c[0].startsWith("PATCH"),
     );
-    expect(patchCalls[patchCalls.length - 1][1].body).toContain("api down");
+    const failureWrite = writes
+      .map((c: any) => c[1])
+      .find((p: any) => String(p.body).includes("api down"));
+    expect(failureWrite).toBeDefined();
   });
 
   it("advances the lifecycle sticky to Specification PR open on the originating issue", async () => {

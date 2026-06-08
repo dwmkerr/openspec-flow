@@ -44,7 +44,7 @@ const buildOctokit = (specBody = "") => ({
     addLabels: jest.fn().mockResolvedValue({}),
   },
   // Raw request() handles status comment PATCHes.
-  request: jest.fn().mockResolvedValue({ data: {} }),
+  request: jest.fn(async (route: string) => route.startsWith("GET") ? { data: [] } : { data: { id: 1 } }),
   pulls: {
     get: jest.fn().mockResolvedValue({
       data: {
@@ -126,14 +126,15 @@ describe("handleCreateImpl", () => {
       expect(opts.octokit.issues.addLabels).toHaveBeenCalledWith(
         expect.objectContaining({ labels: ["openspec:impl"] }),
       );
-      // Terminal status PATCHed; no separate "impl PR opened" comment.
-      const patchCalls = opts.octokit.request.mock.calls.filter(
-        (c: any) => c[0].startsWith("PATCH /repos/"),
+      // Terminal lifecycle sticky write — Implementation row at pr-open.
+      const writes = opts.octokit.request.mock.calls
+        .filter((c: any) => c[0].startsWith("POST") || c[0].startsWith("PATCH"))
+        .map((c: any) => c[1]);
+      const finalWrite = writes.find((p: any) =>
+        String(p.body).includes("PR [#99]"),
       );
-      const finalPatch = patchCalls[patchCalls.length - 1];
-      expect(finalPatch[1].comment_id).toBe(555);
-      expect(finalPatch[1].body).toBe("✅ impl PR opened: #99");
-      expect(opts.octokit.issues.createComment).not.toHaveBeenCalled();
+      expect(finalWrite).toBeDefined();
+      expect(finalWrite.body).toContain("- open");
     });
 
     it("aborts and posts failure when spec PR body has no metadata block", async () => {
@@ -184,10 +185,10 @@ describe("handleCreateImpl", () => {
       await expect(handleCreateImpl(opts)).rejects.toThrow("change directory still exists");
       expect(pushBranch).not.toHaveBeenCalled();
       expect(opts.octokit.pulls.create).not.toHaveBeenCalled();
-      const patchCalls = opts.octokit.request.mock.calls.filter(
-        (c: any) => c[0].startsWith("PATCH /repos/"),
-      );
-      expect(patchCalls[patchCalls.length - 1][1].body).toContain("change directory still exists");
+      const writes = opts.octokit.request.mock.calls
+      .filter((c: any) => c[0].startsWith("POST") || c[0].startsWith("PATCH"))
+      .map((c: any) => c[1]);
+    expect(writes.some((p: any) => String(p.body).includes("change directory still exists"))).toBe(true);
     });
 
     it("posts failure comment when preconditions fail", async () => {
@@ -198,10 +199,10 @@ describe("handleCreateImpl", () => {
 
       await expect(handleCreateImpl(opts)).rejects.toThrow("openspec-new-change skill");
       expect(opts.runner).not.toHaveBeenCalled();
-      const patchCalls = opts.octokit.request.mock.calls.filter(
-        (c: any) => c[0].startsWith("PATCH /repos/"),
-      );
-      expect(patchCalls[patchCalls.length - 1][1].body).toContain("openspec-new-change skill");
+      const writes = opts.octokit.request.mock.calls
+      .filter((c: any) => c[0].startsWith("POST") || c[0].startsWith("PATCH"))
+      .map((c: any) => c[1]);
+    expect(writes.some((p: any) => String(p.body).includes("openspec-new-change skill"))).toBe(true);
     });
 
     it("posts failure on the status comment AND the impl PR when error occurs after PR opens", async () => {
@@ -211,17 +212,13 @@ describe("handleCreateImpl", () => {
 
       await expect(handleCreateImpl(opts)).rejects.toThrow("forbidden");
 
-      // Status comment got the failure body.
-      const patchCalls = opts.octokit.request.mock.calls.filter(
-        (c: any) => c[0].startsWith("PATCH /repos/"),
-      );
-      expect(patchCalls[patchCalls.length - 1][1].body).toContain("forbidden");
-      // Impl PR also got a comment (newly-opened PR's own reviewer
-      // wouldn't see the status comment on the originating issue).
-      const implPrTargets = opts.octokit.issues.createComment.mock.calls
-        .map((c: any) => c[0])
-        .filter((b: any) => b.issue_number === 99);
-      expect(implPrTargets.length).toBeGreaterThan(0);
+      // Lifecycle sticky write — Implementation failed + failure
+      // overlay carries the reason. Reviewers on issue / spec PR /
+      // impl PR all see the same comment via the mirror.
+      const writes = opts.octokit.request.mock.calls
+        .filter((c: any) => c[0].startsWith("POST") || c[0].startsWith("PATCH"))
+        .map((c: any) => c[1]);
+      expect(writes.some((p: any) => String(p.body).includes("forbidden"))).toBe(true);
     });
   });
 });
