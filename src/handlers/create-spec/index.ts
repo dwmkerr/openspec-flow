@@ -20,6 +20,7 @@ import { listNewChanges, summariseProposal } from "./changes.js";
 import { buildSpecPrBody } from "./pr.js";
 import { updateStatusComment } from "../shared/status-comment.js";
 import { mutateLifecycleStickyEverywhere } from "../shared/lifecycle-sticky.js";
+import { currentRun } from "../shared/run-link.js";
 
 // True when the workflow's broker step or legacy App-secret step
 // minted an installation token. Surfaces in the sticky footer as the
@@ -112,6 +113,27 @@ export const handleCreateSpec = async (
 
   try {
     opts.log.info(`create-spec: starting for issue #${opts.issueNumber}`);
+
+    // Tell the lifecycle sticky we're underway. Pre-gate posted
+    // `preparing`; this flips it to `creating in workflow #N` so the
+    // reader sees that work has actually started + has the run link.
+    {
+      const run = currentRun() ?? undefined;
+      await mutateLifecycleStickyEverywhere(
+        opts.octokit as any,
+        opts.owner,
+        opts.repo,
+        { issueNumber: opts.issueNumber },
+        {
+          repo: { owner: opts.owner, name: opts.repo },
+          spec: { kind: "creating", run },
+          implementation: { kind: "not-started" },
+        },
+        (s) => ({ ...s, spec: { kind: "creating", run } }),
+        { appInstalled: appInstalled() },
+        { warn: opts.log.warn },
+      );
+    }
 
     workdir = createWorkdir(opts.issueNumber);
     opts.log.info(`create-spec: workdir=${workdir}`);

@@ -260,15 +260,17 @@ describe("handleCreateImpl — issue lifecycle", () => {
       statusTargetNumber: 10,
     } as any);
 
-    const post = octokit.request.mock.calls.find(
-      (c: any) => c[0].startsWith("POST") && String(c[1].body).includes("openspec-flow:sticky issue="),
-    );
+    // Multiple sticky writes happen (creating-at-start, then pr-open).
+    // Pick the one that carries the final pr-open state for impl.
+    const post = octokit.request.mock.calls
+      .filter((c: any) => c[0].startsWith("POST"))
+      .map((c: any) => c[1])
+      .find((p: any) => String(p.body).includes("PR [#99]"));
     expect(post).toBeDefined();
-    expect(post[1].issue_number).toBe(10);
-    // Sticky now reflects Spec merged + Implementation PR open.
-    expect(post[1].body).toContain("PR [#12]");
-    expect(post[1].body).toContain("- merged");
-    expect(post[1].body).toContain("PR [#99]");
-    expect(post[1].body).toContain("- open");
+    expect(post.issue_number).toBe(10);
+    expect(post.body).toContain("PR [#12]");
+    expect(post.body).toContain("- merged");
+    expect(post.body).toContain("PR [#99]");
+    expect(post.body).toContain("- open");
   });
 });

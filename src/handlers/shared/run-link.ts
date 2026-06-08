@@ -24,3 +24,18 @@ export const renderRunLink = (
   const id = env.GITHUB_RUN_ID;
   return `\n\n> 🔎 Watch: [run #${id}](${url})`;
 };
+
+// Structured run reference for lifecycle sticky's RowState fields.
+// Returns null when not in an Actions runner (no env vars set), so
+// callers can pass it directly into the optional `run` field.
+export const currentRun = (
+  env: NodeJS.ProcessEnv = process.env,
+): { number: number; url: string } | null => {
+  const url = currentRunUrl(env);
+  if (!url) return null;
+  const id = env.GITHUB_RUN_ID;
+  if (!id) return null;
+  const numericId = Number(id);
+  if (!Number.isFinite(numericId)) return null;
+  return { number: numericId, url };
+};
