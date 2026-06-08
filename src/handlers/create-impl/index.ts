@@ -27,8 +27,6 @@ import {
 import { summariseProposal } from "../create-spec/changes.js";
 import { parseSpecPrMetadata } from "../shared/spec-pr-metadata.js";
 import { updateStatusComment } from "../shared/status-comment.js";
-import { upsertLifecycleComment } from "../shared/lifecycle-comment.js";
-import { upsertImplBreadcrumb } from "../shared/issue-breadcrumb.js";
 import { mutateLifecycleSticky } from "../shared/lifecycle-sticky.js";
 import {
   statusImplementing,
@@ -158,20 +156,6 @@ export const handleCreateImpl = async (
       throw new Error("could not resolve change context (changeName/issueNumber/specBranch/issueTitle)");
     }
 
-    // Upsert the issue early breadcrumb now that we know the issue
-    // number and the change name. The App may have posted a
-    // "starting" version pre-gate; this upsert adds the run-link and
-    // the change name in lockstep with the runner's start.
-    await upsertImplBreadcrumb(
-      opts.octokit as any,
-      opts.owner,
-      opts.repo,
-      resolvedIssue,
-      opts.specPrNumber,
-      { kind: "implementing", changeName },
-      { warn: opts.log.warn },
-    );
-
     workdir = createWorkdir(resolvedIssue);
     opts.log.info(`create-impl: workdir=${workdir}`);
 
@@ -286,24 +270,6 @@ export const handleCreateImpl = async (
         { warn: opts.log.warn },
       );
 
-      // Old lifecycle + breadcrumb — keep double-write during migration.
-      await upsertLifecycleComment(
-        opts.octokit as any,
-        opts.owner,
-        opts.repo,
-        resolvedIssue,
-        { phase: "impl-opened", specPr: opts.specPrNumber, implPr: pr.data.number },
-        { warn: opts.log.warn },
-      );
-      await upsertImplBreadcrumb(
-        opts.octokit as any,
-        opts.owner,
-        opts.repo,
-        resolvedIssue,
-        opts.specPrNumber,
-        { kind: "opened", implPrNumber: pr.data.number },
-        { warn: opts.log.warn },
-      );
     }
 
     opts.log.info(`create-impl: done — ${pr.data.html_url}`);
@@ -338,15 +304,6 @@ export const handleCreateImpl = async (
           implementation: { kind: "failed" },
           failure: { phase: "implementation", reason: msg },
         }),
-        { warn: opts.log.warn },
-      );
-      await upsertImplBreadcrumb(
-        opts.octokit as any,
-        opts.owner,
-        opts.repo,
-        resolvedIssue,
-        opts.specPrNumber,
-        { kind: "failed", reason: msg },
         { warn: opts.log.warn },
       );
     }

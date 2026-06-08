@@ -4,7 +4,6 @@
 // takes the create path.
 
 import { handleFinalizeImpl } from "./index.js";
-import { LIFECYCLE_MARKER } from "../shared/lifecycle-comment.js";
 
 const implBody = (extra = "") => `Implementation.
 
@@ -39,19 +38,20 @@ const opts = (octokit: any) => ({
 beforeEach(() => jest.clearAllMocks());
 
 describe("handleFinalizeImpl", () => {
-  it("stamps the terminal lifecycle line on the originating issue", async () => {
+  it("advances the lifecycle sticky to the completed terminal state", async () => {
     const octokit = buildOctokit(implBody());
     await handleFinalizeImpl(opts(octokit) as any);
 
-    // The handler now double-writes: new lifecycle sticky AND the
-    // legacy lifecycle breadcrumb. Look for the post that carries
-    // the legacy marker specifically.
-    const posts = octokit.request.mock.calls.filter((c: any[]) => c[0].startsWith("POST"));
-    expect(posts.length).toBeGreaterThan(0);
-    const legacyPost = posts.find((c: any[]) => c[1].body.includes(LIFECYCLE_MARKER));
-    expect(legacyPost).toBeDefined();
-    expect(legacyPost[1].issue_number).toBe(59);
-    expect(legacyPost[1].body).toContain("✅ implemented & merged — #62 (issue closed)");
+    const post = octokit.request.mock.calls.find(
+      (c: any[]) => c[0].startsWith("POST") && c[1].body.includes("openspec-flow:sticky issue="),
+    );
+    expect(post).toBeDefined();
+    expect(post[1].issue_number).toBe(59);
+    // Terminal: headline reads "Completed.", both rows show "- merged".
+    expect(post[1].body).toContain("Completed.");
+    expect(post[1].body).toContain("PR [#61]");
+    expect(post[1].body).toContain("PR [#62]");
+    expect(post[1].body).toContain("- merged");
   });
 
   it("skips (no throw) when the impl PR has no metadata block", async () => {

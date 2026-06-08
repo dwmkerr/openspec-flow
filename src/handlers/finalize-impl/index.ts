@@ -5,7 +5,6 @@
 
 import { runAgent, type RunAgentLogger } from "../../agent/run.js";
 import { parseImplPrMetadata } from "../shared/impl-pr-metadata.js";
-import { upsertLifecycleComment } from "../shared/lifecycle-comment.js";
 import { mutateLifecycleSticky } from "../shared/lifecycle-sticky.js";
 import type { MinimalOctokit } from "../create-impl/index.js";
 
@@ -70,15 +69,6 @@ export const handleFinalizeImpl = async (
             : s.spec,
       implementation: { kind: "pr-merged", prNumber: opts.implPrNumber },
     }),
-    { warn: opts.log.warn },
-  );
-
-  await upsertLifecycleComment(
-    opts.octokit as any,
-    opts.owner,
-    opts.repo,
-    meta.issue,
-    { phase: "impl-merged", specPr: meta.specPr, implPr: opts.implPrNumber },
     { warn: opts.log.warn },
   );
 

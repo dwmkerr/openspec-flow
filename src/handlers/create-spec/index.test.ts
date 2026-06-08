@@ -211,7 +211,7 @@ describe("handleCreateSpec", () => {
     expect(patchCalls[patchCalls.length - 1][1].body).toContain("api down");
   });
 
-  it("seeds the issue lifecycle breadcrumb at spec-opened", async () => {
+  it("advances the lifecycle sticky to Specification PR open on the originating issue", async () => {
     // Route-aware octokit: GET comments → [] so the upsert posts.
     const octokit = {
       issues: { createComment: jest.fn().mockResolvedValue({}), addLabels: jest.fn().mockResolvedValue({}) },
@@ -227,11 +227,12 @@ describe("handleCreateSpec", () => {
     await handleCreateSpec(baseOpts({ octokit }));
 
     const post = octokit.request.mock.calls.find(
-      (c: any) => c[0].startsWith("POST") && String(c[1].body).includes("openspec-flow:lifecycle"),
+      (c: any) => c[0].startsWith("POST") && String(c[1].body).includes("openspec-flow:sticky issue="),
     );
     expect(post).toBeDefined();
     expect(post[1].issue_number).toBe(10);
-    expect(post[1].body).toContain("✅ spec PR opened — #99");
-    expect(post[1].body).toContain("▢ spec PR merged");
+    // New sticky's table reflects spec PR open.
+    expect(post[1].body).toContain("PR [#99]");
+    expect(post[1].body).toContain("- open");
   });
 });
