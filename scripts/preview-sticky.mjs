@@ -137,6 +137,48 @@ const FIXTURES = [
       implementation: { kind: "pr-merged", prNumber: 138 },
     },
   },
+  {
+    slug: "10-creating-with-step",
+    label: "Creating with inline step (agent sub-state)",
+    issueNumber: 130,
+    state: {
+      repo: REPO,
+      spec: {
+        kind: "creating",
+        run: SPEC_RUN,
+        step: "gathering context",
+      },
+      implementation: { kind: "not-started" },
+    },
+  },
+  {
+    slug: "11-pr-variant-spec-iterating",
+    label: "PR variant: tracked-on-issue header + identical sticky body",
+    issueNumber: 130,
+    audience: "pr",
+    prNumber: 137,
+    state: {
+      repo: REPO,
+      spec: {
+        kind: "pr-iterating",
+        prNumber: 137,
+        run: SPEC_ITER_RUN,
+        step: "implementing the change",
+      },
+      implementation: { kind: "not-started" },
+    },
+  },
+  {
+    slug: "12-app-not-installed-hint",
+    label: "App not installed - install hint visible in the footer",
+    issueNumber: 130,
+    appInstalled: false,
+    state: {
+      repo: REPO,
+      spec: { kind: "creating", run: SPEC_RUN },
+      implementation: { kind: "not-started" },
+    },
+  },
 ];
 
 const htmlTemplate = (markdown, label) => `<!doctype html>
@@ -227,7 +269,11 @@ const page = await browser.newPage({ viewport: { width: 1024, height: 1200 } });
 const summaries = [];
 
 for (const fx of FIXTURES) {
-  const md = renderLifecycleSticky(fx.issueNumber, fx.state);
+  const md = renderLifecycleSticky(fx.state, {
+    issueNumber: fx.issueNumber,
+    audience: fx.audience ?? "issue",
+    appInstalled: fx.appInstalled ?? true,
+  }, fx.prNumber);
   const html = htmlTemplate(md, fx.label);
   const htmlPath = join(OUT_DIR, `${fx.slug}.html`);
   writeFileSync(htmlPath, html, "utf8");

@@ -50,10 +50,11 @@ describe("runDispatch", () => {
     expect(dispatchTo).not.toHaveBeenCalled();
   });
 
-  it("actionable intent: eyes, comment, token, registry dispatch", async () => {
+  it("actionable intent (target is a PR): eyes, sticky, token, registry dispatch", async () => {
     (dispatchTo as jest.Mock).mockResolvedValue({ dispatched: true });
     const deps = makeDeps();
-    const intent: Intent = { kind: "create-spec", issueNumber: 7, title: "t" };
+    // Use iterate-spec — target is a PR, dispatch posts the per-PR sticky.
+    const intent: Intent = { kind: "iterate-spec", prNumber: 7 };
 
     await runDispatch(intent, deps);
 
@@ -64,6 +65,18 @@ describe("runDispatch", () => {
     expect(ctx.gitPushToken).toBe("tok");
     expect(ctx.statusCommentId).toBe(4242);
     expect(ctx.statusTargetNumber).toBe(7);
+  });
+
+  it("create-spec skips the per-target sticky (lifecycle sticky owns the issue)", async () => {
+    (dispatchTo as jest.Mock).mockResolvedValue({ dispatched: true });
+    const deps = makeDeps();
+    const intent: Intent = { kind: "create-spec", issueNumber: 7, title: "t" };
+
+    await runDispatch(intent, deps);
+
+    expect(upsertStickyComment).not.toHaveBeenCalled();
+    const ctx = (dispatchTo as jest.Mock).mock.calls[0][1];
+    expect(ctx.statusCommentId).toBeUndefined();
   });
 
   it("null handler surfaces a visible failure on the sticky comment", async () => {

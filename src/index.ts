@@ -276,6 +276,10 @@ const maybeMutateLifecycleSticky = async (
           return state;
       }
     },
+    // App-side write: webhook delivery proves the App is installed
+    // on this repo. The plain-workflow write (later, in dispatch.ts)
+    // passes false unless the broker / App-secret mint succeeded.
+    { appInstalled: true },
     { warn: (m: string) => context.log.warn(m) },
   );
 };

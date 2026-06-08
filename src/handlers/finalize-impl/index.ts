@@ -5,7 +5,10 @@
 
 import { runAgent, type RunAgentLogger } from "../../agent/run.js";
 import { parseImplPrMetadata } from "../shared/impl-pr-metadata.js";
-import { mutateLifecycleSticky } from "../shared/lifecycle-sticky.js";
+import { mutateLifecycleStickyEverywhere } from "../shared/lifecycle-sticky.js";
+
+const appInstalled = (): boolean =>
+  process.env.OPENSPEC_FLOW_APP_INSTALLED === "true";
 import type { MinimalOctokit } from "../create-impl/index.js";
 
 export interface HandleFinalizeImplOpts {
@@ -46,11 +49,14 @@ export const handleFinalizeImpl = async (
   // pr-merged state in the sticky, fall back to a synthetic 0 only
   // when the sticky was empty AND specPr is missing (unlikely).
   const specPrFromMeta = meta.specPr;
-  await mutateLifecycleSticky(
+  const terminalPrs = specPrFromMeta !== undefined
+    ? [specPrFromMeta, opts.implPrNumber]
+    : [opts.implPrNumber];
+  await mutateLifecycleStickyEverywhere(
     opts.octokit as any,
     opts.owner,
     opts.repo,
-    meta.issue,
+    { issueNumber: meta.issue, prNumbers: terminalPrs },
     {
       repo: { owner: opts.owner, name: opts.repo },
       spec:
@@ -69,6 +75,7 @@ export const handleFinalizeImpl = async (
             : s.spec,
       implementation: { kind: "pr-merged", prNumber: opts.implPrNumber },
     }),
+    { appInstalled: appInstalled() },
     { warn: opts.log.warn },
   );
 

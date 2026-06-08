@@ -19,7 +19,14 @@ import {
 import { listNewChanges, summariseProposal } from "./changes.js";
 import { buildSpecPrBody } from "./pr.js";
 import { updateStatusComment } from "../shared/status-comment.js";
-import { mutateLifecycleSticky } from "../shared/lifecycle-sticky.js";
+import { mutateLifecycleStickyEverywhere } from "../shared/lifecycle-sticky.js";
+
+// True when the workflow's broker step or legacy App-secret step
+// minted an installation token. Surfaces in the sticky footer as the
+// "install the App for real-time updates" hint, so the absence of the
+// App is visible to users tracking the comment.
+const appInstalled = (): boolean =>
+  process.env.OPENSPEC_FLOW_APP_INSTALLED === "true";
 import {
   statusReadingIssue,
   statusPushing,
@@ -185,12 +192,13 @@ export const handleCreateSpec = async (
 
     await setStatus(statusSpecPrOpened(pr.data.number));
 
-    // Mutate the issue's lifecycle sticky: spec phase has a PR open.
-    await mutateLifecycleSticky(
+    // Mutate the lifecycle sticky on the issue AND mirror to the
+    // new spec PR. Same content, audience header on the PR variant.
+    await mutateLifecycleStickyEverywhere(
       opts.octokit as any,
       opts.owner,
       opts.repo,
-      opts.issueNumber,
+      { issueNumber: opts.issueNumber, prNumbers: [pr.data.number] },
       {
         repo: { owner: opts.owner, name: opts.repo },
         spec: { kind: "not-started" },
@@ -200,6 +208,7 @@ export const handleCreateSpec = async (
         ...s,
         spec: { kind: "pr-open", prNumber: pr.data.number },
       }),
+      { appInstalled: appInstalled() },
       { warn: opts.log.warn },
     );
 
