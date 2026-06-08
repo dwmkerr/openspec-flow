@@ -28,6 +28,7 @@ import { summariseProposal } from "../create-spec/changes.js";
 import { parseSpecPrMetadata } from "../shared/spec-pr-metadata.js";
 import { updateStatusComment } from "../shared/status-comment.js";
 import { mutateLifecycleStickyEverywhere } from "../shared/lifecycle-sticky.js";
+import { currentRun } from "../shared/run-link.js";
 
 const appInstalled = (): boolean =>
   process.env.OPENSPEC_FLOW_APP_INSTALLED === "true";
@@ -157,6 +158,26 @@ export const handleCreateImpl = async (
     }
     if (!changeName || !specBranch || !resolvedIssue || !issueTitle) {
       throw new Error("could not resolve change context (changeName/issueNumber/specBranch/issueTitle)");
+    }
+
+    // Tell the lifecycle sticky we're underway. Pre-gate marked
+    // implementation=preparing; this flips to creating-in-workflow.
+    {
+      const run = currentRun() ?? undefined;
+      await mutateLifecycleStickyEverywhere(
+        opts.octokit as any,
+        opts.owner,
+        opts.repo,
+        { issueNumber: resolvedIssue, prNumbers: [opts.specPrNumber] },
+        {
+          repo: { owner: opts.owner, name: opts.repo },
+          spec: { kind: "pr-merged", prNumber: opts.specPrNumber },
+          implementation: { kind: "creating", run },
+        },
+        (s) => ({ ...s, implementation: { kind: "creating", run } }),
+        { appInstalled: appInstalled() },
+        { warn: opts.log.warn },
+      );
     }
 
     workdir = createWorkdir(resolvedIssue);

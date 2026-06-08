@@ -226,13 +226,15 @@ describe("handleCreateSpec", () => {
     };
     await handleCreateSpec(baseOpts({ octokit }));
 
-    const post = octokit.request.mock.calls.find(
-      (c: any) => c[0].startsWith("POST") && String(c[1].body).includes("openspec-flow:sticky issue="),
-    );
+    // Multiple sticky writes happen now (creating-at-start, then
+    // pr-open). Pick the one that reflects the final state.
+    const post = octokit.request.mock.calls
+      .filter((c: any) => c[0].startsWith("POST"))
+      .map((c: any) => c[1])
+      .find((p: any) => String(p.body).includes("PR [#99]"));
     expect(post).toBeDefined();
-    expect(post[1].issue_number).toBe(10);
-    // New sticky's table reflects spec PR open.
-    expect(post[1].body).toContain("PR [#99]");
-    expect(post[1].body).toContain("- open");
+    expect(post.issue_number).toBe(10);
+    expect(post.body).toContain("PR [#99]");
+    expect(post.body).toContain("- open");
   });
 });
