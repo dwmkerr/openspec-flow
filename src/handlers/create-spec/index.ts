@@ -6,7 +6,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { runAgent, type RunAgentLogger } from "../../agent/run.js";
-import { branchName } from "./slug.js";
+import { branchName, expectedChangeName } from "./slug.js";
 import { createWorkdir, removeWorkdir } from "./workdir.js";
 import { assertOpenSpecCli, assertSkillPresent } from "./preconditions.js";
 import {
@@ -151,10 +151,17 @@ export const handleCreateSpec = async (
     assertOpenSpecCli();
     assertSkillPresent(workdir);
 
+    // Deterministic change name threaded into the prompt so the agent
+    // knows exactly which directory to write into, and the harness
+    // knows exactly which directory to read. Without this, a stale
+    // orphan change in openspec/changes/ would win the picker's
+    // alphabetical-first selection over the agent's actual output.
+    const wantedChangeName = expectedChangeName(opts.issueNumber, opts.issueTitle);
     const prompt = interpolate(PROMPT_TEMPLATE, {
       issueNumber: String(opts.issueNumber),
       issueTitle: opts.issueTitle,
       repo: `${opts.owner}/${opts.repo}`,
+      changeName: wantedChangeName,
     });
 
     await setStatus(statusReadingIssue(opts.issueNumber));
@@ -182,7 +189,16 @@ export const handleCreateSpec = async (
     if (changes.length === 0) {
       throw new Error("agent didn't create any openspec changes under openspec/changes/");
     }
-    const changeName = changes[0];
+    // Prefer the prompt-threaded name; fall back to whatever exists
+    // (with a warn log) if the agent ignored the instruction. The
+    // fallback keeps a misbehaving agent from blocking the flow but
+    // surfaces the drift so we can tighten the prompt later.
+    const changeName = changes.includes(wantedChangeName) ? wantedChangeName : changes[0];
+    if (changeName !== wantedChangeName) {
+      opts.log.warn(
+        `create-spec: agent didn't honour prompt-threaded name "${wantedChangeName}"; falling back to "${changeName}". Other dirs present: [${changes.join(", ")}]`,
+      );
+    }
     opts.log.info(`create-spec: agent produced change "${changeName}"${changes.length > 1 ? ` (+${changes.length - 1} more)` : ""}`);
 
     await setStatus(statusPushing());
