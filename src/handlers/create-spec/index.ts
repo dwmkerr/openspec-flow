@@ -19,7 +19,7 @@ import {
 import { listNewChanges, summariseProposal } from "./changes.js";
 import { buildSpecPrBody } from "./pr.js";
 import { updateStatusComment } from "../shared/status-comment.js";
-import { upsertLifecycleComment } from "../shared/lifecycle-comment.js";
+import { mutateLifecycleSticky } from "../shared/lifecycle-sticky.js";
 import {
   statusReadingIssue,
   statusPushing,
@@ -185,15 +185,24 @@ export const handleCreateSpec = async (
 
     await setStatus(statusSpecPrOpened(pr.data.number));
 
-    // Seed the issue lifecycle breadcrumb (best-effort).
-    await upsertLifecycleComment(
+    // Mutate the issue's lifecycle sticky: spec phase has a PR open.
+    await mutateLifecycleSticky(
       opts.octokit as any,
       opts.owner,
       opts.repo,
       opts.issueNumber,
-      { phase: "spec-opened", specPr: pr.data.number },
+      {
+        repo: { owner: opts.owner, name: opts.repo },
+        spec: { kind: "not-started" },
+        implementation: { kind: "not-started" },
+      },
+      (s) => ({
+        ...s,
+        spec: { kind: "pr-open", prNumber: pr.data.number },
+      }),
       { warn: opts.log.warn },
     );
+
 
     opts.log.info(`create-spec: done — ${pr.data.html_url}`);
 

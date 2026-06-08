@@ -261,11 +261,14 @@ describe("handleCreateImpl — issue lifecycle", () => {
     } as any);
 
     const post = octokit.request.mock.calls.find(
-      (c: any) => c[0].startsWith("POST") && String(c[1].body).includes("openspec-flow:lifecycle"),
+      (c: any) => c[0].startsWith("POST") && String(c[1].body).includes("openspec-flow:sticky issue="),
     );
     expect(post).toBeDefined();
     expect(post[1].issue_number).toBe(10);
-    expect(post[1].body).toContain("✅ spec PR merged");
-    expect(post[1].body).toContain("✅ impl PR opened — #99");
+    // Sticky now reflects Spec merged + Implementation PR open.
+    expect(post[1].body).toContain("PR [#12]");
+    expect(post[1].body).toContain("- merged");
+    expect(post[1].body).toContain("PR [#99]");
+    expect(post[1].body).toContain("- open");
   });
 });

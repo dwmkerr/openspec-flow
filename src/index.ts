@@ -4,9 +4,11 @@ import { runDispatch } from "./dispatch.js";
 import { dispatchMode } from "./config.js";
 import { runAppInit } from "./app-install/index.js";
 import { addEyes, removeEyes } from "./reactions.js";
-import { upsertImplBreadcrumb } from "./handlers/shared/issue-breadcrumb.js";
-import { upsertStickyComment } from "./handlers/shared/sticky-status.js";
-import { statusReceived } from "./handlers/shared/status-bodies.js";
+import {
+  mutateLifecycleSticky,
+  type LifecycleStickyState,
+} from "./handlers/shared/lifecycle-sticky.js";
+import { resolveIssueNumber } from "./handlers/shared/resolve-issue.js";
 import { handleTokenRequest } from "./oidc-broker/route.js";
 import type { InstallationTokenIssuer } from "./oidc-broker/index.js";
 import express from "express";
@@ -62,20 +64,10 @@ export default (app: Probot, options: AppOptions = {}): void => {
       // don't trigger eyes.
       await maybeAddEyes(intent, context);
 
-      // Issue early breadcrumb for create-impl. Sticky comment for
-      // this intent lives on the spec PR, leaving the originating
-      // issue silent for 30+ seconds until the workflow runner spins
-      // up. Posting now gives the issue a visible signal that work
-      // started; the workflow's create-impl handler upserts the same
-      // marker later with the run link + progress states.
-      await maybeBreadcrumbImplStart(intent, context);
-
-      // Sticky status comment pre-gate. Workflow's runDispatch upserts
-      // the same marker ~30s later when the runner spins up. Without
-      // this pre-gate post, the target issue/PR sits silent during
-      // runner spinup; with it, the user sees `openspec-flow received:
-      // <intent>. Starting…` within ~1s of labeling.
-      await maybeAddStickyReceived(intent, context);
+      // Issue-level lifecycle sticky pre-gate. Lives on the originating
+      // issue regardless of which PR triggered the event. Workflow
+      // handlers mutate the same comment as state progresses.
+      await maybeMutateLifecycleSticky(intent, context);
 
       // In-proc event dispatch is dev-only. In `action` mode the shim
       // workflow in the user's repo handles these events; Probot
@@ -208,42 +200,86 @@ const stickyPreGateIntents = new Set([
   "create-impl",
 ]);
 
-const maybeAddStickyReceived = async (
+// Issue-level lifecycle sticky pre-gate. Lives on the originating
+// issue (not the PR being labelled/merged). Mutates one phase row
+// per event so the issue carries the canonical "where are we" view.
+const maybeMutateLifecycleSticky = async (
   intent: Intent,
   context: Context<(typeof EVENTS)[number]>,
 ): Promise<void> => {
   if (!stickyPreGateIntents.has(intent.kind)) return;
-  const num = targetNumber(context.payload);
-  if (num === null) return;
-  const summary = describe(intent);
-  const body = statusReceived(summary);
-  await upsertStickyComment(
+  const owner = context.repo().owner;
+  const repo = context.repo().repo;
+  const issueNumber = await resolveIssueNumber(
+    intent,
     context.octokit as any,
-    context.repo().owner,
-    context.repo().repo,
-    num,
-    intent.kind,
-    body,
+    owner,
+    repo,
+  );
+  if (issueNumber === null) return;
+
+  const seed: LifecycleStickyState = {
+    repo: { owner, name: repo },
+    spec: { kind: "not-started" },
+    implementation: { kind: "not-started" },
+  };
+
+  await mutateLifecycleSticky(
+    context.octokit as any,
+    owner,
+    repo,
+    issueNumber,
+    seed,
+    (state) => {
+      // Pre-gate mutations: announce intent before the runner spins
+      // up. Workflow handlers (or workflow_run events) replace these
+      // `preparing` rows with `creating <run>` once the runner reports
+      // its run id.
+      switch (intent.kind) {
+        case "create-spec":
+          return { ...state, spec: { kind: "preparing" } };
+        case "iterate-spec":
+          // Only flip if we have a PR number on record. Pre-gate is
+          // fired right after the user labels the PR with openspec:go.
+          if (state.spec.kind === "pr-open" || state.spec.kind === "pr-iterating") {
+            const pr =
+              state.spec.kind === "pr-open" ? state.spec.prNumber : state.spec.prNumber;
+            return { ...state, spec: { kind: "pr-iterating", prNumber: pr } };
+          }
+          return state;
+        case "iterate-impl":
+          if (
+            state.implementation.kind === "pr-open" ||
+            state.implementation.kind === "pr-iterating"
+          ) {
+            const pr =
+              state.implementation.kind === "pr-open"
+                ? state.implementation.prNumber
+                : state.implementation.prNumber;
+            return {
+              ...state,
+              implementation: { kind: "pr-iterating", prNumber: pr },
+            };
+          }
+          return state;
+        case "create-impl":
+          // Spec PR merged; implementation about to begin.
+          return {
+            ...state,
+            spec:
+              state.spec.kind === "pr-open"
+                ? { kind: "pr-merged", prNumber: state.spec.prNumber }
+                : state.spec,
+            implementation: { kind: "preparing" },
+          };
+        default:
+          return state;
+      }
+    },
     { warn: (m: string) => context.log.warn(m) },
   );
 };
 
-const maybeBreadcrumbImplStart = async (
-  intent: Intent,
-  context: Context<(typeof EVENTS)[number]>,
-): Promise<void> => {
-  if (intent.kind !== "create-impl") return;
-  if (intent.issueNumber === null) return;
-  await upsertImplBreadcrumb(
-    context.octokit as any,
-    context.repo().owner,
-    context.repo().repo,
-    intent.issueNumber,
-    intent.specPrNumber,
-    { kind: "starting" },
-    { warn: (m: string) => context.log.warn(m) },
-  );
-};
 
 const maybeAddEyes = async (
   intent: Intent,

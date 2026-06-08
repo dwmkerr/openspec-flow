@@ -5,7 +5,7 @@
 
 import { runAgent, type RunAgentLogger } from "../../agent/run.js";
 import { parseImplPrMetadata } from "../shared/impl-pr-metadata.js";
-import { upsertLifecycleComment } from "../shared/lifecycle-comment.js";
+import { mutateLifecycleSticky } from "../shared/lifecycle-sticky.js";
 import type { MinimalOctokit } from "../create-impl/index.js";
 
 export interface HandleFinalizeImplOpts {
@@ -42,12 +42,33 @@ export const handleFinalizeImpl = async (
 
   // Issue is already closed (Closes #N); commenting on a closed issue
   // is allowed. Best-effort — upsert never throws.
-  await upsertLifecycleComment(
+  // specPr from impl metadata is optional; preserve any existing
+  // pr-merged state in the sticky, fall back to a synthetic 0 only
+  // when the sticky was empty AND specPr is missing (unlikely).
+  const specPrFromMeta = meta.specPr;
+  await mutateLifecycleSticky(
     opts.octokit as any,
     opts.owner,
     opts.repo,
     meta.issue,
-    { phase: "impl-merged", specPr: meta.specPr, implPr: opts.implPrNumber },
+    {
+      repo: { owner: opts.owner, name: opts.repo },
+      spec:
+        specPrFromMeta !== undefined
+          ? { kind: "pr-merged", prNumber: specPrFromMeta }
+          : { kind: "not-started" },
+      implementation: { kind: "pr-merged", prNumber: opts.implPrNumber },
+    },
+    (s) => ({
+      ...s,
+      spec:
+        s.spec.kind === "pr-merged"
+          ? s.spec
+          : specPrFromMeta !== undefined
+            ? { kind: "pr-merged", prNumber: specPrFromMeta }
+            : s.spec,
+      implementation: { kind: "pr-merged", prNumber: opts.implPrNumber },
+    }),
     { warn: opts.log.warn },
   );
 

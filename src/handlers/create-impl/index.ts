@@ -27,8 +27,7 @@ import {
 import { summariseProposal } from "../create-spec/changes.js";
 import { parseSpecPrMetadata } from "../shared/spec-pr-metadata.js";
 import { updateStatusComment } from "../shared/status-comment.js";
-import { upsertLifecycleComment } from "../shared/lifecycle-comment.js";
-import { upsertImplBreadcrumb } from "../shared/issue-breadcrumb.js";
+import { mutateLifecycleSticky } from "../shared/lifecycle-sticky.js";
 import {
   statusImplementing,
   statusPushing,
@@ -157,20 +156,6 @@ export const handleCreateImpl = async (
       throw new Error("could not resolve change context (changeName/issueNumber/specBranch/issueTitle)");
     }
 
-    // Upsert the issue early breadcrumb now that we know the issue
-    // number and the change name. The App may have posted a
-    // "starting" version pre-gate; this upsert adds the run-link and
-    // the change name in lockstep with the runner's start.
-    await upsertImplBreadcrumb(
-      opts.octokit as any,
-      opts.owner,
-      opts.repo,
-      resolvedIssue,
-      opts.specPrNumber,
-      { kind: "implementing", changeName },
-      { warn: opts.log.warn },
-    );
-
     workdir = createWorkdir(resolvedIssue);
     opts.log.info(`create-impl: workdir=${workdir}`);
 
@@ -266,27 +251,25 @@ export const handleCreateImpl = async (
     // (spec merged + impl opened). Best-effort. resolvedIssue comes
     // from the spec-PR metadata when not passed directly.
     if (resolvedIssue !== undefined) {
-      await upsertLifecycleComment(
+      // New lifecycle sticky — single source of truth for the issue.
+      await mutateLifecycleSticky(
         opts.octokit as any,
         opts.owner,
         opts.repo,
         resolvedIssue,
-        { phase: "impl-opened", specPr: opts.specPrNumber, implPr: pr.data.number },
+        {
+          repo: { owner: opts.owner, name: opts.repo },
+          spec: { kind: "pr-merged", prNumber: opts.specPrNumber },
+          implementation: { kind: "not-started" },
+        },
+        (s) => ({
+          ...s,
+          spec: { kind: "pr-merged", prNumber: opts.specPrNumber },
+          implementation: { kind: "pr-open", prNumber: pr.data.number },
+        }),
         { warn: opts.log.warn },
       );
 
-      // Replace the early breadcrumb with the terminal opened state
-      // so the issue thread shows a single "✅ impl PR opened: #M"
-      // entry rather than a stale "implementing…" line.
-      await upsertImplBreadcrumb(
-        opts.octokit as any,
-        opts.owner,
-        opts.repo,
-        resolvedIssue,
-        opts.specPrNumber,
-        { kind: "opened", implPrNumber: pr.data.number },
-        { warn: opts.log.warn },
-      );
     }
 
     opts.log.info(`create-impl: done — ${pr.data.html_url}`);
@@ -306,13 +289,21 @@ export const handleCreateImpl = async (
     // the issue thread reflects the terminal state (the sticky
     // status comment lives on the spec PR, not the issue).
     if (resolvedIssue !== undefined) {
-      await upsertImplBreadcrumb(
+      await mutateLifecycleSticky(
         opts.octokit as any,
         opts.owner,
         opts.repo,
         resolvedIssue,
-        opts.specPrNumber,
-        { kind: "failed", reason: msg },
+        {
+          repo: { owner: opts.owner, name: opts.repo },
+          spec: { kind: "pr-merged", prNumber: opts.specPrNumber },
+          implementation: { kind: "failed" },
+        },
+        (s) => ({
+          ...s,
+          implementation: { kind: "failed" },
+          failure: { phase: "implementation", reason: msg },
+        }),
         { warn: opts.log.warn },
       );
     }

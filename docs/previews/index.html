@@ -1,0 +1,51 @@
+<!doctype html>
+<html><head>
+<meta charset="utf-8" />
+<title>openspec-flow sticky comment previews</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 24px; background: #f6f8fa; }
+  h1 { font-size: 20px; margin-bottom: 24px; }
+  .row { margin-bottom: 40px; }
+  .row h2 { font-size: 14px; color: #57606a; margin-bottom: 8px; font-weight: 600; }
+  img { border: 1px solid #d0d7de; border-radius: 6px; max-width: 100%; }
+</style>
+</head>
+<body>
+<h1>openspec-flow sticky comment — every state</h1>
+<div class="row">
+  <h2>Pre-gate: just labeled, agent preparing to create spec (no run id yet)</h2>
+  <img src="01-pregate-preparing-spec.png" alt="Pre-gate: just labeled, agent preparing to create spec (no run id yet)" />
+</div>
+<div class="row">
+  <h2>Workflow running, agent creating the spec</h2>
+  <img src="02-spec-creating.png" alt="Workflow running, agent creating the spec" />
+</div>
+<div class="row">
+  <h2>Spec PR open, awaiting review</h2>
+  <img src="03-spec-pr-awaiting-review.png" alt="Spec PR open, awaiting review" />
+</div>
+<div class="row">
+  <h2>Spec PR iterating from review comments</h2>
+  <img src="04-spec-pr-iterating.png" alt="Spec PR iterating from review comments" />
+</div>
+<div class="row">
+  <h2>Spec merged, agent creating the implementation</h2>
+  <img src="05-impl-creating.png" alt="Spec merged, agent creating the implementation" />
+</div>
+<div class="row">
+  <h2>Implementation PR open, awaiting review</h2>
+  <img src="06-impl-pr-awaiting-review.png" alt="Implementation PR open, awaiting review" />
+</div>
+<div class="row">
+  <h2>Implementation PR iterating from review comments</h2>
+  <img src="07-impl-pr-iterating.png" alt="Implementation PR iterating from review comments" />
+</div>
+<div class="row">
+  <h2>Run failed during implementation</h2>
+  <img src="08-failed.png" alt="Run failed during implementation" />
+</div>
+<div class="row">
+  <h2>Completed - both phases merged, issue closes</h2>
+  <img src="09-completed.png" alt="Completed - both phases merged, issue closes" />
+</div>
+</body></html>
