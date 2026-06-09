@@ -18,7 +18,6 @@ import {
 } from "./git.js";
 import { listNewChanges, summariseProposal } from "./changes.js";
 import { buildSpecPrBody } from "./pr.js";
-import { updateStatusComment } from "../shared/status-comment.js";
 import { mutateLifecycleStickyEverywhere } from "../shared/lifecycle-sticky.js";
 import { currentRun } from "../shared/run-link.js";
 
@@ -28,13 +27,6 @@ import { currentRun } from "../shared/run-link.js";
 // App is visible to users tracking the comment.
 const appInstalled = (): boolean =>
   process.env.OPENSPEC_FLOW_APP_INSTALLED === "true";
-import {
-  statusReadingIssue,
-  statusPushing,
-  statusSpecPrOpened,
-  statusFailure,
-} from "../shared/status-bodies.js";
-
 const PROMPT_TEMPLATE = readFileSync(join(__dirname, "prompt.md"), "utf8");
 
 // Minimal Octokit surface the handler needs. Lets tests inject a
@@ -100,16 +92,33 @@ export const handleCreateSpec = async (
   const run = opts.runner ?? runAgent;
 
   let workdir = "";
-  const statusLog = { warn: opts.log.warn };
-  const setStatus = (body: string) =>
-    updateStatusComment(
+  // Set the agent's current sub-step on the lifecycle sticky's
+  // Specification row. Runs in the issue + any provided PR. We don't
+  // have a PR number until the spec PR opens; the mirror to PR happens
+  // later in the flow.
+  const setSpecStep = async (step: string) => {
+    const r = currentRun() ?? undefined;
+    await mutateLifecycleStickyEverywhere(
       opts.octokit as any,
       opts.owner,
       opts.repo,
-      opts.statusCommentId,
-      body,
-      statusLog,
+      { issueNumber: opts.issueNumber },
+      {
+        repo: { owner: opts.owner, name: opts.repo },
+        spec: { kind: "creating", run: r, step },
+        implementation: { kind: "not-started" },
+      },
+      (s) => ({
+        ...s,
+        spec:
+          s.spec.kind === "creating"
+            ? { ...s.spec, step, run: s.spec.run ?? r }
+            : { kind: "creating", run: r, step },
+      }),
+      { appInstalled: appInstalled() },
+      { warn: opts.log.warn },
     );
+  };
 
   try {
     opts.log.info(`create-spec: starting for issue #${opts.issueNumber}`);
@@ -164,7 +173,7 @@ export const handleCreateSpec = async (
       changeName: wantedChangeName,
     });
 
-    await setStatus(statusReadingIssue(opts.issueNumber));
+    await setSpecStep("gathering context");
 
     const headBefore = headSha(workdir);
 
@@ -201,7 +210,7 @@ export const handleCreateSpec = async (
     }
     opts.log.info(`create-spec: agent produced change "${changeName}"${changes.length > 1 ? ` (+${changes.length - 1} more)` : ""}`);
 
-    await setStatus(statusPushing());
+    await setSpecStep("pushing");
 
     pushBranch(workdir, branch);
     opts.log.info(`create-spec: pushed ${branch}`);
@@ -227,8 +236,6 @@ export const handleCreateSpec = async (
       issue_number: pr.data.number,
       labels: ["openspec:spec"],
     });
-
-    await setStatus(statusSpecPrOpened(pr.data.number));
 
     // Mutate the lifecycle sticky on the issue AND mirror to the
     // new spec PR. Same content, audience header on the PR variant.
@@ -283,7 +290,26 @@ export const handleCreateSpec = async (
     return { prNumber: pr.data.number, prUrl: pr.data.html_url };
   } catch (err) {
     const msg = (err as Error).message;
-    await setStatus(statusFailure(msg));
+    // Surface failure on the lifecycle sticky's Specification row.
+    const failureRun = currentRun() ?? undefined;
+    await mutateLifecycleStickyEverywhere(
+      opts.octokit as any,
+      opts.owner,
+      opts.repo,
+      { issueNumber: opts.issueNumber },
+      {
+        repo: { owner: opts.owner, name: opts.repo },
+        spec: { kind: "failed" },
+        implementation: { kind: "not-started" },
+      },
+      (s) => ({
+        ...s,
+        spec: { kind: "failed" },
+        failure: { phase: "spec", reason: msg, run: failureRun },
+      }),
+      { appInstalled: appInstalled() },
+      { warn: opts.log.warn },
+    );
     throw err;
   } finally {
     if (workdir) removeWorkdir(workdir);

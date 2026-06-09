@@ -47,7 +47,7 @@ const buildOctokit = (opts: { body?: string | null; state?: string } = {}) => ({
     createComment: jest.fn().mockResolvedValue({}),
     addLabels: jest.fn().mockResolvedValue({}),
   },
-  request: jest.fn().mockResolvedValue({ data: {} }),
+  request: jest.fn(async (route: string) => route.startsWith("GET") ? { data: [] } : { data: { id: 1 } }),
   pulls: {
     get: jest.fn().mockResolvedValue({
       data: {
@@ -95,13 +95,14 @@ describe("handleIterateSpec", () => {
       "/tmp/openspec-flow/iterate-test-wd",
       "chore/26-rfc-shim",
     );
-    const patchCalls = opts.octokit.request.mock.calls.filter(
-      (c: any) => c[0].startsWith("PATCH /repos/"),
-    );
-    const finalPatch = patchCalls[patchCalls.length - 1];
-    expect(finalPatch[1].comment_id).toBe(555);
-    expect(finalPatch[1].body).toBe("✅ spec updated by openspec-flow");
-    expect(opts.octokit.issues.createComment).not.toHaveBeenCalled();
+    // Lifecycle sticky was written via the issue-comments endpoint.
+    // After iteration completes, the spec row flips back to pr-open.
+    const writes = opts.octokit.request.mock.calls
+      .filter((c: any) => c[0].startsWith("POST") || c[0].startsWith("PATCH"))
+      .map((c: any) => c[1]);
+    expect(writes.length).toBeGreaterThan(0);
+    const finalWrite = writes[writes.length - 1];
+    expect(finalWrite.body).toContain("- open");
   });
 
   it("interpolates change context into the prompt", async () => {
@@ -140,10 +141,8 @@ describe("handleIterateSpec", () => {
 
     await expect(handleIterateSpec(opts)).rejects.toThrow("PR is closed");
     expect(opts.runner).not.toHaveBeenCalled();
-    const patchCalls = opts.octokit.request.mock.calls.filter(
-      (c: any) => c[0].startsWith("PATCH /repos/"),
-    );
-    expect(patchCalls[patchCalls.length - 1][1].body).toContain("PR is closed");
+    // No sticky write — failure happened before metadata resolution,
+    // so the handler doesn't know the originating issue yet.
   });
 
   it("aborts when the spec PR body has no metadata block", async () => {
@@ -174,10 +173,10 @@ describe("handleIterateSpec", () => {
 
     await expect(handleIterateSpec(opts)).rejects.toThrow("change directory no longer exists");
     expect(pushBranch).not.toHaveBeenCalled();
-    const patchCalls = opts.octokit.request.mock.calls.filter(
-      (c: any) => c[0].startsWith("PATCH /repos/"),
-    );
-    expect(patchCalls[patchCalls.length - 1][1].body).toContain("change directory no longer exists");
+    const writes = opts.octokit.request.mock.calls
+      .filter((c: any) => c[0].startsWith("POST") || c[0].startsWith("PATCH"))
+      .map((c: any) => c[1]);
+    expect(writes.some((p: any) => String(p.body).includes("change directory no longer exists"))).toBe(true);
   });
 
   it("posts failure comment when preconditions fail", async () => {
@@ -188,10 +187,10 @@ describe("handleIterateSpec", () => {
 
     await expect(handleIterateSpec(opts)).rejects.toThrow("openspec-new-change skill");
     expect(opts.runner).not.toHaveBeenCalled();
-    const patchCalls = opts.octokit.request.mock.calls.filter(
-      (c: any) => c[0].startsWith("PATCH /repos/"),
-    );
-    expect(patchCalls[patchCalls.length - 1][1].body).toContain("openspec-new-change skill");
+    const writes = opts.octokit.request.mock.calls
+      .filter((c: any) => c[0].startsWith("POST") || c[0].startsWith("PATCH"))
+      .map((c: any) => c[1]);
+    expect(writes.some((p: any) => String(p.body).includes("openspec-new-change skill"))).toBe(true);
   });
 
   it("posts failure comment when agent throws", async () => {
@@ -200,9 +199,9 @@ describe("handleIterateSpec", () => {
     });
 
     await expect(handleIterateSpec(opts)).rejects.toThrow("api down");
-    const patchCalls = opts.octokit.request.mock.calls.filter(
-      (c: any) => c[0].startsWith("PATCH /repos/"),
-    );
-    expect(patchCalls[patchCalls.length - 1][1].body).toContain("api down");
+    const writes = opts.octokit.request.mock.calls
+      .filter((c: any) => c[0].startsWith("POST") || c[0].startsWith("PATCH"))
+      .map((c: any) => c[1]);
+    expect(writes.some((p: any) => String(p.body).includes("api down"))).toBe(true);
   });
 });

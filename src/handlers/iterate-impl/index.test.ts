@@ -37,7 +37,7 @@ spec-pr: 61
 
 const buildOctokit = (o: { body?: string | null; state?: string } = {}) => ({
   issues: { createComment: jest.fn().mockResolvedValue({}), addLabels: jest.fn().mockResolvedValue({}) },
-  request: jest.fn().mockResolvedValue({ data: {} }),
+  request: jest.fn(async (route: string) => route.startsWith("GET") ? { data: [] } : { data: { id: 1 } }),
   pulls: {
     get: jest.fn().mockResolvedValue({
       data: {
@@ -81,8 +81,13 @@ describe("handleIterateImpl", () => {
     );
     expect(opts.runner).toHaveBeenCalledTimes(1);
     expect(pushBranch).toHaveBeenCalledWith("/tmp/openspec-flow/iterate-impl-wd", "feat/59-add-ls-alias");
-    const patches = opts.octokit.request.mock.calls.filter((c: any) => c[0].startsWith("PATCH /repos/"));
-    expect(patches[patches.length - 1][1].body).toBe("✅ impl updated by openspec-flow");
+    // Lifecycle sticky write — Implementation row flips back to pr-open.
+    const writes = opts.octokit.request.mock.calls
+      .filter((c: any) => c[0].startsWith("POST") || c[0].startsWith("PATCH"))
+      .map((c: any) => c[1]);
+    expect(writes.length).toBeGreaterThan(0);
+    const finalWrite = writes[writes.length - 1];
+    expect(finalWrite.body).toContain("- open");
   });
 
   it("prompt forbids spec/openspec mutations + frames the impl scope", async () => {
