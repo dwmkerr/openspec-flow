@@ -8,70 +8,32 @@
 
 ## How it works
 
-```
-   Open issue                  Iterate on spec               Review implementation
-   add openspec:go     ────►   Spec PR created with    ────► Impl PR created with
-                                openspec:spec label.          openspec:impl label.
-                                Use openspec:go to update.    Use openspec:go to update.
-                                Merge when ready.             Merge to ship.
+1. **Label an issue** with `openspec:go`.
+2. **A specification PR opens automatically.** Review it, comment, or push back. Re-apply `openspec:go` on the PR to update the spec based on the discussion. Merge when you're happy with it.
+3. **An implementation PR is raised**, which archives the change. Re-apply `openspec:go` on this PR after comments or discussion to improve the implementation.
+4. **Merge the implementation PR.** The original issue closes automatically.
 
-   [issue #42]                 [PR #43 openspec:spec]        [PR #44 openspec:impl]
-```
-
-You apply one label. The bot applies the rest.
-
-| Label | Applied by | Meaning |
-|---|---|---|
-| `openspec:go` | **you** | Trigger. Add to an issue to start; add to a PR to re-run iteration. |
-| `openspec:spec` | bot | Spec PR — review the proposal, then merge. |
-| `openspec:impl` | bot | Implementation PR — review the code, then merge to ship. |
-
-Discussion is optional. Comment, re-apply `openspec:go`, the agent updates in place.
+See [`docs/how-it-works.md`](./docs/how-it-works.md) for the richer version with screenshots of every state.
 
 ## Install
 
-### Mode A — install the GitHub App (recommended)
+### Install the GitHub App (recommended)
 
-```
-https://github.com/apps/openspec-flow-dev/installations/new
-```
+[**openspec-flow on the GitHub Apps marketplace**](https://github.com/apps/openspec-flow)
 
-Pick the repo. The App opens a setup PR (branch `chore/openspec-flow-init`) that scaffolds the shim workflow + README block + creates the three contract labels. Set `ANTHROPIC_API_KEY` (`gh secret set ANTHROPIC_API_KEY -R <owner/repo>`) and merge.
+Install on a repository. A pull request opens automatically containing the workflow shim that drives the flow, along with instructions for setting the required secrets. Merge it and the flow is live.
 
-### Mode B — drop in a workflow file
+### Shim it yourself (when you can't install the App)
 
-In your repo, add `.github/workflows/openspec-flow.yml`:
+If you can't install the App, install the CLI and let it scaffold the same machinery as a pull request:
 
-```yaml
-name: openspec-flow
-on:
-  issues:            { types: [labeled] }
-  pull_request:      { types: [labeled, closed] }
-  issue_comment:     { types: [created] }
-  pull_request_review_comment: { types: [created] }
-permissions:
-  contents: write
-  issues: write
-  pull-requests: write
-jobs:
-  flow:
-    uses: dwmkerr/openspec-flow/.github/workflows/openspec-flow.yml@main
-    secrets:
-      ANTHROPIC_API_KEY:          ${{ secrets.ANTHROPIC_API_KEY }}
-      OPENSPEC_FLOW_APP_ID:       ${{ secrets.OPENSPEC_FLOW_APP_ID || '' }}
-      OPENSPEC_FLOW_PRIVATE_KEY:  ${{ secrets.OPENSPEC_FLOW_PRIVATE_KEY || '' }}
+```bash
+npx @dwmkerr/openspec-flow install
 ```
 
-Add `ANTHROPIC_API_KEY` to repo secrets. Create the three contract labels. Or just run `npx @dwmkerr/openspec-flow install` to do all of that.
+The CLI explains how to create the three contract labels (`openspec:go`, `openspec:spec`, `openspec:impl`) and how to set the required Anthropic API key secret. Same workflow, same flow.
 
-## Use
-
-1. Open an issue describing the work.
-2. Apply `openspec:go`.
-3. Review the spec PR. Merge.
-4. Review the impl PR. Merge to ship.
-
-That's the whole interface.
+**App vs shim trade-off**: with the App, status comments update in **real time** as you work. With the shim, status updates happen during the workflow run, so feedback lags by ~30 seconds while the runner spins up. Both modes operate identically beyond that.
 
 ## Develop
 
