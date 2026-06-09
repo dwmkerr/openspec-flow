@@ -6,12 +6,30 @@
   </p>
 </p>
 
-## Quick start
+## Quickstart
 
 1. **Install openspec-flow** via the GitHub App or the CLI — see the [installation guide](#install) below.
 2. **Label an issue** with `openspec:go`.
 3. **A specification PR opens automatically**, labelled `openspec:spec`. Review it, leave comments. Re-apply `openspec:go` on the PR to update the spec based on the discussion. Merge when ready.
 4. **An implementation PR is raised**, labelled `openspec:impl`. Re-apply `openspec:go` after comments to improve the implementation. Merge to ship — the original issue closes automatically.
+
+## Install
+
+### Install the GitHub App (recommended)
+
+[**openspec-flow on the GitHub Apps marketplace**](https://github.com/apps/openspec-flow)
+
+When the App is installed, feedback on issues and pull requests showing the current stage of openspec-flow's operations is **real time**. A pull request opens automatically containing the workflow shim that drives the flow, along with instructions for setting the required secrets. Merge it and the flow is live.
+
+### Shim it yourself (when you can't install the App)
+
+If you can't install the App, install the CLI and let it scaffold the same machinery as a pull request:
+
+```bash
+npx @dwmkerr/openspec-flow install
+```
+
+Feedback on issues and pull requests happens during the workflow run, so updates lag by ~30 seconds while the runner spins up. The CLI explains how to create the three contract labels (`openspec:go`, `openspec:spec`, `openspec:impl`) and how to set the required Anthropic API key secret. Same workflow, same flow.
 
 ## How it works
 
@@ -28,26 +46,6 @@ A single sticky comment lives on the issue, mirrored to every PR raised for the 
 | **7. You commented and re-applied `openspec:go`** on the implementation PR. | ![Iterating on the implementation PR](./docs/previews/07-impl-pr-iterating.png) | Wait for the iteration, then review again. |
 | **8. Something went wrong.** The comment surfaces the warning + reason. | ![Run failed during implementation](./docs/previews/08-failed.png) | Click through to the workflow run for details. Apply `openspec:go` after fixing the cause to retry. |
 | **9. You merged the implementation PR.** The flow is complete; the original issue closes automatically. | ![Completed](./docs/previews/09-completed.png) | Nothing — done. |
-
-## Install
-
-### Install the GitHub App (recommended)
-
-[**openspec-flow on the GitHub Apps marketplace**](https://github.com/apps/openspec-flow)
-
-Install on a repository. A pull request opens automatically containing the workflow shim that drives the flow, along with instructions for setting the required secrets. Merge it and the flow is live.
-
-### Shim it yourself (when you can't install the App)
-
-If you can't install the App, install the CLI and let it scaffold the same machinery as a pull request:
-
-```bash
-npx @dwmkerr/openspec-flow install
-```
-
-The CLI explains how to create the three contract labels (`openspec:go`, `openspec:spec`, `openspec:impl`) and how to set the required Anthropic API key secret. Same workflow, same flow.
-
-**App vs shim trade-off**: with the App, comment updates are **real time**. With the shim, updates happen during the workflow run, so feedback lags by ~30 seconds while the runner spins up. Both modes operate identically beyond that.
 
 ## Develop
 
