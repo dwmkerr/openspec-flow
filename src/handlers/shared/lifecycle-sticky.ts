@@ -18,6 +18,7 @@
 
 const REPO_URL = "https://github.com/dwmkerr/openspec-flow";
 const DOCS_URL = "https://github.com/dwmkerr/openspec-flow#readme";
+const SPONSOR_URL = "https://github.com/sponsors/dwmkerr";
 
 const WORKING_GIF_URL =
   "https://raw.githubusercontent.com/dwmkerr/openspec-flow/main/assets/openspec-flow-working.gif";
@@ -235,8 +236,11 @@ const issueRef = (
     ? `> Tracked on issue [#${opts.issueNumber}](https://github.com/${state.repo.owner}/${state.repo.name}/issues/${opts.issueNumber}) →`
     : "";
 
+// Footer carries the hosting-cost nudge. openspec-flow runs on a small
+// Fly host (~$2/mo). Discreet ask in <sub>, right-aligned, single line
+// so it doesn't compete with the headline or status table.
 const footer = (): string =>
-  `<div align="right"><sub><a href="${REPO_URL}">openspec-flow</a> · <a href="${DOCS_URL}">docs</a></sub></div>`;
+  `<div align="right"><sub><a href="${REPO_URL}">openspec-flow</a> · <a href="${DOCS_URL}">docs</a> · costs a little each month to host - please consider <a href="${SPONSOR_URL}">sponsoring</a></sub></div>`;
 
 // Lookup marker scope depends on audience: the issue sticky and the
 // per-PR sticky live on different threads, so they need different

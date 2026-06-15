@@ -1,0 +1,35 @@
+# Production Fly app for openspec-flow.
+#
+# Deployed automatically when release-please cuts a tag (see
+# .github/workflows/cicd.yaml). Manual fallback:
+#   flyctl deploy --config fly.prod.toml -a openspec-flow
+
+app = 'openspec-flow'
+primary_region = 'lhr'
+kill_signal = 'SIGINT'
+kill_timeout = '5s'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[env]
+  HOST = '0.0.0.0'
+  OPENSPEC_FLOW_DISPATCH_MODE = 'action'
+  PORT = '3000'
+  # Baked into the shim at install time so target repos auto-point
+  # at this host as their broker.
+  OPENSPEC_FLOW_BROKER_PUBLIC_URL = 'https://openspec-flow.fly.dev'
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  # Prod stays warm — cold-start delay on webhooks looks like a
+  # broken App. Cost of one always-on shared-cpu-1x VM is ~$2/mo.
+  auto_stop_machines = 'off'
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ['app']
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '256mb'

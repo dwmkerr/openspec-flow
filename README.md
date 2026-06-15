@@ -4,6 +4,11 @@
   <p align="center">
     Label an issue. Get a spec PR. Merge it. Get an implementation PR.
   </p>
+  <p align="center">
+    <a href="https://github.com/dwmkerr/openspec-flow/releases"><img src="https://img.shields.io/github/v/release/dwmkerr/openspec-flow?label=release" alt="Latest release"></a>
+    <a href="https://github.com/dwmkerr/openspec-flow/actions/workflows/cicd.yaml"><img src="https://github.com/dwmkerr/openspec-flow/actions/workflows/cicd.yaml/badge.svg" alt="CI/CD"></a>
+    <a href="https://github.com/sponsors/dwmkerr"><img src="https://img.shields.io/github/sponsors/dwmkerr?label=sponsor" alt="Sponsor"></a>
+  </p>
 </p>
 
 ## Quickstart

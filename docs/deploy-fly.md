@@ -1,10 +1,16 @@
 # Deploy on Fly.io
 
-openspec-flow ships with a Dockerfile + `fly.toml` for Fly.io. One
-small VM hosts both the webhook receiver and the OIDC token broker.
+openspec-flow ships with a Dockerfile + two Fly configs (`fly.dev.toml`,
+`fly.prod.toml`) for Fly.io. One small VM per app hosts both the
+webhook receiver and the OIDC token broker.
 
-This page covers two Fly deployments — one for development, one for
-production — and the matrix of which dev mode you use when.
+**Deploys are normally automatic.** Conventional-commit PRs merge to
+main → CI deploys to dev. A release-please PR merges → CI tags and
+deploys to prod. See [`release.md`](./release.md) for the full loop.
+
+This page covers manual deploys (incident response, first-time setup,
+mode switching). For day-to-day, you should never run `flyctl deploy`
+by hand.
 
 ## Why Fly
 
@@ -30,30 +36,38 @@ smee for fast handler-code iteration, but broker calls go to
 
 ## First-time setup (per deployment)
 
+For prod, the full activation procedure (GitHub App webhook setup,
+permissions, private key, App ID, secret commands) lives in
+[`app-setup.md`](./app-setup.md) — that's the canonical guide.
+This section is the quick reference for dev or a sandbox app.
+
 ```bash
 # install
 brew install flyctl
 fly auth login
 
-# from the repo root, create the app (different names for dev / prod)
-fly launch --no-deploy --copy-config --name openspec-flow-dev
+# create the app (different names for dev / prod)
+fly apps create openspec-flow-dev --org personal
 # (or `openspec-flow` for prod)
 
-# secrets — the same set the .env documents for local dev
+# secrets — set on Fly so Probot can boot
 fly secrets set -a openspec-flow-dev \
   APP_ID="$APP_ID" \
   WEBHOOK_SECRET="$WEBHOOK_SECRET" \
-  ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
+  PRIVATE_KEY="$(cat private-key.pem)" \
   OPENSPEC_FLOW_BROKER_AUDIENCE="openspec-flow-dev"
 
-# private key — multi-line, easier from file
-fly secrets set -a openspec-flow-dev \
-  PRIVATE_KEY="$(cat private-key.pem)" \
-  PRIVATE_KEY_PATH="/dev/stdin"
+# (dev only) ANTHROPIC_API_KEY is needed when running in-process mode for local testing
+fly secrets set -a openspec-flow-dev ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
 
 # deploy
-fly deploy -a openspec-flow-dev
+flyctl deploy --remote-only --config fly.dev.toml -a openspec-flow-dev
 ```
+
+> Prod does NOT need `ANTHROPIC_API_KEY`. In Action mode (the prod
+> default, set in `fly.prod.toml`), the Fly host never invokes
+> Claude — the agent runs on the target repo's GitHub Actions runner
+> using the user's own `ANTHROPIC_API_KEY` Actions secret.
 
 > Note on `PRIVATE_KEY_PATH`: the existing code reads the private key
 > from a file at `PRIVATE_KEY_PATH`. The simplest way to wire that on
@@ -77,12 +91,38 @@ fly logs -a openspec-flow-dev
 
 ## Updating
 
+**Normal path — CI.** Merge a conventional-commit PR to `main` → dev
+deploys. Merge the release-please PR → prod deploys. See
+[`release.md`](./release.md).
+
+**Manual fallback — incident response.**
+
 ```bash
-fly deploy -a openspec-flow-dev   # rebuild image, rolling deploy
+flyctl deploy --remote-only --config fly.dev.toml -a openspec-flow-dev
+flyctl deploy --remote-only --config fly.prod.toml -a openspec-flow
 ```
 
 The Dockerfile installs `npm ci`, builds, and runs `node dist/server.js`.
 Each deploy is ~2–3 minutes.
+
+## CI deploy tokens
+
+CI uses two repo secrets, one per Fly app, to keep blast radius small:
+
+| Secret | Issued for | How to (re)create |
+|---|---|---|
+| `FLY_API_TOKEN_DEV` | `openspec-flow-dev` | `fly tokens create deploy -a openspec-flow-dev --expiry 8760h` |
+| `FLY_API_TOKEN_PROD` | `openspec-flow` | `fly tokens create deploy -a openspec-flow --expiry 8760h` |
+
+Set with:
+
+```bash
+fly tokens create deploy -a openspec-flow --expiry 8760h | \
+  gh secret set FLY_API_TOKEN_PROD --repo dwmkerr/openspec-flow
+```
+
+Rotate annually (the 1-year `--expiry` is intentional — forces
+visibility on rotation cadence rather than running tokens forever).
 
 ## Three local-dev workflows
 
