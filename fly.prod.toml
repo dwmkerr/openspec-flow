@@ -23,11 +23,12 @@ kill_timeout = '5s'
 [http_service]
   internal_port = 3000
   force_https = true
-  # Prod stays warm — cold-start delay on webhooks looks like a
-  # broken App. Cost of one always-on shared-cpu-1x VM is ~$2/mo.
-  auto_stop_machines = 'off'
+  # Auto-stop after idle. One cold-start per session (~3-5s) then
+  # warm for the rest of the user's flow; dwarfed by the 30s runner
+  # cold-start downstream. Saves ~$4/mo on two HA machines.
+  auto_stop_machines = 'stop'
   auto_start_machines = true
-  min_machines_running = 1
+  min_machines_running = 0
   processes = ['app']
 
 [[vm]]

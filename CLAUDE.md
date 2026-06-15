@@ -238,7 +238,6 @@ Files that depend on this contract:
 - `docs/release.md` — release pipeline (conventional commits → release-please → deploy)
 - `openspec/specs/openspec-flow/spec.md` — workflow-mode spec
 - `openspec/specs/intent-recognition/spec.md` — classifier spec (created by `wire-intent-recognition`)
-- `openspec/specs/release-pipeline/spec.md` — release/deploy contract (created by `add-release-pipeline`)
 - Future per-handler specs
 
 If you find a discrepancy between this file and any of those, treat this
@@ -282,6 +281,29 @@ and leaves the repo in an inconsistent state.
 
 This is the contract. When in doubt, run `openspec list --json` and
 `openspec status --change <name>` before doing anything.
+
+### What does NOT belong in a spec
+
+Specs describe **behaviour the App implements** — handler logic, classifier
+rules, payloads, comment shapes, what state transitions trigger what side
+effects. Config + process live in `docs/`, not `openspec/specs/`.
+
+Out of scope for spec deltas:
+
+- **CI/CD pipeline config** — `cicd.yaml`, release-please configuration, GitHub Actions runners. Standard tool configuration, not App behaviour.
+- **Hosting / deployment config** — `fly.dev.toml`, `fly.prod.toml`, secrets, scaling, region selection. Operational choice, not App behaviour.
+- **Build tooling** — `tsconfig.json`, `jest.config.js`, `package.json` scripts, ESLint rules.
+- **Repository conventions** — conventional commits, branch naming, PR templates. Borrowed from sibling projects; not something we implement.
+- **External tool documentation** — how release-please works, what flyctl does, how GitHub Apps register webhooks.
+
+A change PR may touch any of these (e.g. `add-release-pipeline` adds the
+whole CI workflow + Fly config). What gets a *spec delta* is only the
+subset of that change that is App behaviour — e.g. the sticky-comment
+footer in that change. Everything else lives in the proposal + `docs/`.
+
+If a proposal's "Modified Capabilities" section is empty after this
+filter, that's fine — the change is still recorded; it just doesn't
+need to mutate the canonical spec tree.
 
 ## Patterns
 

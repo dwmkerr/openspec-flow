@@ -11,7 +11,7 @@
 ## 2. Fly configuration split
 
 - [x] 2.1 Rename `fly.toml` to `fly.dev.toml`. Preserve `auto_stop_machines = 'stop'`, `min_machines_running = 0`, `OPENSPEC_FLOW_BROKER_PUBLIC_URL=https://openspec-flow-dev.fly.dev`.
-- [x] 2.2 Create `fly.prod.toml`: app `openspec-flow`, `auto_stop_machines = 'off'`, `min_machines_running = 1`, `OPENSPEC_FLOW_BROKER_PUBLIC_URL=https://openspec-flow.fly.dev`.
+- [x] 2.2 Create `fly.prod.toml`: app `openspec-flow`, `auto_stop_machines = 'stop'`, `min_machines_running = 0`, `OPENSPEC_FLOW_BROKER_PUBLIC_URL=https://openspec-flow.fly.dev`. (Auto-stop chosen over always-warm: one cold-start per active session is dwarfed by the 30s downstream runner cold-start; saves ~$4/mo.)
 - [x] 2.3 `flyctl config validate --config fly.dev.toml` passes.
 - [x] 2.4 `flyctl config validate --config fly.prod.toml` passes.
 
@@ -50,7 +50,7 @@
 
 ## 7. Validation
 
-- [ ] 7.1 `openspec validate --change add-release-pipeline` passes.
-- [ ] 7.2 Commit on `spike/release-pipeline`, push, open PR.
+- [x] 7.1 `openspec validate --changes add-release-pipeline` passes.
+- [x] 7.2 Commit on `spike/release-pipeline`, push, open PR (#95).
 - [ ] 7.3 Merge spike PR → confirm `deploy-dev` succeeds → confirm release-please opens v0.1.0 PR → merge release PR → confirm `deploy-prod` succeeds → confirm `openspec-flow.fly.dev` serves the new image.
 - [ ] 7.4 Archive change: `openspec archive add-release-pipeline --yes` as part of the impl PR (or follow-up PR if scope warrants).

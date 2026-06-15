@@ -22,18 +22,17 @@ The Fly host runs on a credit card we now pay for (~$2/mo today, well into the t
 - **Modified**: `docs/app-setup.md` — Step 0 expanded from "claim the slug" to a full prod activation procedure (webhook URL, permissions table, private-key download, `fly secrets set` invocation).
 - **Modified**: `CLAUDE.md` — adds `docs/release.md` to "files that depend on this contract" and notes release flow under "Working style".
 - **Modified**: `README.md` — release badge under H1.
-- **Out of scope**: Cloudflare Workers / AWS Lambda port (deferred until Fly bill > $20/mo). Multi-region prod (single `lhr` region is enough). Container vulnerability scanning in CI (separate change). Custom domain (the `.fly.dev` URL is the contract today).
+- **Out of scope**: Cloudflare Workers / AWS Lambda port (deferred until Fly bill > $20/mo). Multi-region prod (single `lhr` region is enough). Container vulnerability scanning in CI (separate change). Custom domain (the `.fly.dev` URL is the contract today). Specs for the release pipeline + Fly hosting config (standard repo machinery — see Capabilities note).
 
 ## Capabilities
-
-### New Capabilities
-
-- `release-pipeline`: defines (a) the conventional-commit → release-please → tag flow, (b) the gating of `deploy-dev` on every `main` push, (c) the gating of `deploy-prod` on release-please's `release_created` output, (d) the per-app Fly deploy token isolation requirement.
 
 ### Modified Capabilities
 
 - `issue-lifecycle-comment`: the sticky-comment footer SHALL include a link to the project's GitHub Sponsors page accompanied by a single-line hosting-cost nudge. Surface remains right-aligned `<sub>`; visual weight unchanged.
-- `openspec-flow`: the production Fly app `openspec-flow` SHALL run with `auto_stop_machines = 'off'` and `min_machines_running >= 1` so webhook delivery is never gated on cold start; the development Fly app `openspec-flow-dev` SHALL continue to auto-stop on idle for cost. Production deploys SHALL be tag-driven, not main-push-driven.
+
+### Out of scope for specs
+
+The release pipeline (`cicd.yaml`, `release-please-*.json`), the Fly hosting configuration (`fly.dev.toml`, `fly.prod.toml`), and the CI deploy tokens are repository machinery — configuration of standard tools, not behaviour the App implements. They are documented in `docs/release.md` + `docs/deploy-fly.md` + `docs/app-setup.md` and explicitly excluded from the spec layer per the "what does NOT belong in a spec" guidance in `CLAUDE.md`. Only the sticky-comment footer change above results in App behaviour worth specifying.
 
 ## Impact
 
