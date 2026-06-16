@@ -10,9 +10,13 @@ One-time setup. ~5 minutes. Walks you from zero to a working `.env` file you can
 - Three labels created on your sandbox repo
 - App installed on your sandbox repo
 
-## Step 0 — claim the prod slug (one minute)
+## Step 0 — register and activate the prod App
 
-Before anything else, register the production App name so nobody else takes it. Open: <https://github.com/settings/apps/new>
+Two phases. **Phase 0a (claim)** can be done early to reserve the slug. **Phase 0b (activate)** wires up the live prod deployment and should be done when you're ready to deploy.
+
+### Phase 0a — claim the slug (one minute)
+
+Open: <https://github.com/settings/apps/new>
 
 | Field | Value |
 |---|---|
@@ -21,7 +25,66 @@ Before anything else, register the production App name so nobody else takes it. 
 | Webhook → Active | ☐ unchecked (dormant for now) |
 | Permissions | leave at defaults |
 
-Click **Create GitHub App**. Done. Slug `openspec-flow` is yours. Bot identity will eventually be `openspec-flow[bot]`. Leave it dormant.
+Click **Create GitHub App**. Slug `openspec-flow` is yours. Bot identity will eventually be `openspec-flow[bot]`. Leave it dormant.
+
+### Phase 0b — activate for prod deploy
+
+Open the App you created at <https://github.com/settings/apps/openspec-flow> and edit:
+
+| Field | Value |
+|---|---|
+| Webhook → Active | ✅ checked |
+| Webhook URL | `https://openspec-flow.fly.dev` |
+| Webhook secret | run `openssl rand -hex 32` locally, paste, **save value for the Fly secret step** |
+
+**Repository permissions** (same table as Step 1 below — keep dev and prod in sync):
+
+| Permission | Access | Why |
+|---|---|---|
+| Contents | Read & write | commit + push to spec/impl branches |
+| Issues | Read & write | label, comment, close |
+| Pull requests | Read & write | open, comment, merge tracking |
+| Workflows | Read & write | install-time init PR commits `.github/workflows/openspec-flow.yml` |
+| Actions | Read | workflow-run telemetry |
+| Checks | Read | check-suite events |
+
+**Subscribe to events**: Issues, Issue comment, Pull request, Pull request review, Pull request review comment, Check suite, Workflow run.
+
+**Where can this App be installed?** → `Any account` (prod is public).
+
+Save changes. Note the **App ID** at the top.
+
+Scroll to **Private keys** → **Generate a private key** → `.pem` downloads. Delete it after Step 0b is complete (it lives encrypted on Fly afterwards).
+
+**Setup URL / Callback URL / OAuth options**: leave all blank/unchecked. openspec-flow uses installation tokens, not user OAuth.
+
+#### Provision the Fly app and set secrets
+
+```bash
+# create the prod Fly app
+fly apps create openspec-flow --org personal
+
+# set all four secrets in one shot
+fly secrets set -a openspec-flow \
+  APP_ID="<the App ID number>" \
+  WEBHOOK_SECRET="<the openssl rand -hex 32 value>" \
+  PRIVATE_KEY="$(cat ~/Downloads/openspec-flow.YYYY-MM-DD.private-key.pem)" \
+  OPENSPEC_FLOW_BROKER_AUDIENCE="openspec-flow"
+
+# first deploy
+flyctl deploy --remote-only --config fly.prod.toml -a openspec-flow
+
+# verify
+curl -i -X POST https://openspec-flow.fly.dev/api/token   # expect 400 {"error":"missing bearer token"}
+fly logs -a openspec-flow                                  # expect Probot boot lines + "Listening on http://0.0.0.0:3000"
+
+# clean up the private key from disk
+rm ~/Downloads/openspec-flow.YYYY-MM-DD.private-key.pem
+```
+
+After this, prod is live. Subsequent updates go via the release pipeline (see [`release.md`](./release.md)); the manual `flyctl deploy` above is the escape hatch for incident response only.
+
+> Why no `ANTHROPIC_API_KEY` on prod? `fly.prod.toml` sets `OPENSPEC_FLOW_DISPATCH_MODE=action`, so the Fly host never invokes Claude — the agent runs on the target repo's GitHub Actions runner using that repo's `ANTHROPIC_API_KEY` secret. Dev sometimes flips to `in-process` for local testing, which is why dev carries the key.
 
 ## Step 1 — register the dev App
 

@@ -143,10 +143,25 @@ Probot runs in one of three places per task; URLs in App / repo
 config decide which:
 
 - **Local** — `make tunnel` (smee) + `make dev`. Hot-reload, breakpoint debug. App webhook URL = smee channel.
-- **Fly dev** — `fly deploy -a openspec-flow-dev`. Stable URL for the broker and webhook receiver while iterating remotely. See `docs/deploy-fly.md`.
-- **Fly prod** — `fly deploy -a openspec-flow`. Production.
+- **Fly dev** — `openspec-flow-dev.fly.dev`. Auto-stops on idle. CI deploys here on every push to `main` via `.github/workflows/cicd.yaml`. Config: `fly.dev.toml`. Manual fallback: `flyctl deploy --remote-only --config fly.dev.toml -a openspec-flow-dev`.
+- **Fly prod** — `openspec-flow.fly.dev`. Always-warm (`min_machines_running = 1`, `auto_stop_machines = 'off'`) so webhook delivery is never cold. CI deploys here only when a release-please PR merges (release-driven, tag-gated). Config: `fly.prod.toml`. Manual fallback: `flyctl deploy --remote-only --config fly.prod.toml -a openspec-flow`.
 
-App webhook URL and broker URL (`OPENSPEC_FLOW_BROKER_URL` repo/org variable) are independent: mix-and-match across modes per task. The Fly Dockerfile + `fly.toml` deploy the same code that runs locally; secrets via `fly secrets set`. Private key is read from `PRIVATE_KEY` env when present, else from `PRIVATE_KEY_PATH` (local dev default).
+App webhook URL and broker URL (`OPENSPEC_FLOW_BROKER_URL` repo/org variable) are independent: mix-and-match across modes per task. The Fly Dockerfile + the two `fly.*.toml` files deploy the same code that runs locally; secrets via `fly secrets set -a <app>`. Private key is read from `PRIVATE_KEY` env when present, else from `PRIVATE_KEY_PATH` (local dev default).
+
+## Release pipeline
+
+Conventional commits drive everything. See `docs/release.md` for the full loop.
+
+| Event | What happens |
+|---|---|
+| PR opened/updated | `test` job runs (typecheck, jest, build) |
+| Push to `main` | `test` + `deploy-dev` + release-please opens/updates release PR |
+| Release PR merged | tag `vX.Y.Z` + GitHub Release + `deploy-prod` against the tagged commit |
+| Manual tag pushed | nothing (CI listens for push to `main` and PRs only — use the manual `flyctl deploy` fallback for hotfixes) |
+
+Commit types: `feat:` (minor bump), `fix:`/`perf:` (patch bump), `docs:` (CHANGELOG entry, no bump), `refactor:`/`test:`/`ci:`/`build:`/`chore:` (hidden from CHANGELOG, no bump). `BREAKING CHANGE:` in commit body bumps major (or minor pre-1.0).
+
+CI deploy tokens: `FLY_API_TOKEN_DEV` and `FLY_API_TOKEN_PROD` as repo secrets, each scoped to one Fly app via `fly tokens create deploy -a <app>`. Rotate annually.
 
 ## Install modes
 
@@ -219,6 +234,8 @@ Files that depend on this contract:
 - `docs/architecture.md` — system design
 - `docs/developer-guide.md` — dev loop
 - `docs/app-setup.md` — App registration
+- `docs/deploy-fly.md` — manual + CI Fly deploy reference
+- `docs/release.md` — release pipeline (conventional commits → release-please → deploy)
 - `openspec/specs/openspec-flow/spec.md` — workflow-mode spec
 - `openspec/specs/intent-recognition/spec.md` — classifier spec (created by `wire-intent-recognition`)
 - Future per-handler specs
@@ -264,6 +281,29 @@ and leaves the repo in an inconsistent state.
 
 This is the contract. When in doubt, run `openspec list --json` and
 `openspec status --change <name>` before doing anything.
+
+### What does NOT belong in a spec
+
+Specs describe **behaviour the App implements** — handler logic, classifier
+rules, payloads, comment shapes, what state transitions trigger what side
+effects. Config + process live in `docs/`, not `openspec/specs/`.
+
+Out of scope for spec deltas:
+
+- **CI/CD pipeline config** — `cicd.yaml`, release-please configuration, GitHub Actions runners. Standard tool configuration, not App behaviour.
+- **Hosting / deployment config** — `fly.dev.toml`, `fly.prod.toml`, secrets, scaling, region selection. Operational choice, not App behaviour.
+- **Build tooling** — `tsconfig.json`, `jest.config.js`, `package.json` scripts, ESLint rules.
+- **Repository conventions** — conventional commits, branch naming, PR templates. Borrowed from sibling projects; not something we implement.
+- **External tool documentation** — how release-please works, what flyctl does, how GitHub Apps register webhooks.
+
+A change PR may touch any of these (CI workflow, Fly config, build
+tooling). What gets a *spec delta* is only the subset of that change
+that is App behaviour. Everything else lives in commit messages + `docs/`.
+
+If a change has no App-behaviour delta at all — e.g. a PR that only
+adds a release pipeline + Fly config — skip OpenSpec entirely for that
+change. The git history + `docs/` are sufficient. OpenSpec is for
+specifying behaviour, not recording every PR.
 
 ## Patterns
 

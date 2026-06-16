@@ -123,7 +123,7 @@ describe("renderLifecycleSticky", () => {
     expect(out).not.toContain("alt=\"working\"");
   });
 
-  it("footer is right-aligned <sub> with both links", () => {
+  it("footer is right-aligned <sub> with repo, docs, and sponsor links", () => {
     const out = renderLifecycleSticky(
       {
         repo: REPO,
@@ -135,6 +135,9 @@ describe("renderLifecycleSticky", () => {
     expect(out).toContain('<div align="right"><sub>');
     expect(out).toContain("openspec-flow</a>");
     expect(out).toContain("docs</a>");
+    expect(out).toContain("https://github.com/sponsors/dwmkerr");
+    expect(out).toContain("sponsoring</a>");
+    expect(out).toMatch(/costs a little each month/i);
   });
 
   it("PR audience prepends a 'Tracked on issue' link header", () => {
