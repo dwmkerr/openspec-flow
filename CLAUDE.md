@@ -296,14 +296,14 @@ Out of scope for spec deltas:
 - **Repository conventions** — conventional commits, branch naming, PR templates. Borrowed from sibling projects; not something we implement.
 - **External tool documentation** — how release-please works, what flyctl does, how GitHub Apps register webhooks.
 
-A change PR may touch any of these (e.g. `add-release-pipeline` adds the
-whole CI workflow + Fly config). What gets a *spec delta* is only the
-subset of that change that is App behaviour — e.g. the sticky-comment
-footer in that change. Everything else lives in the proposal + `docs/`.
+A change PR may touch any of these (CI workflow, Fly config, build
+tooling). What gets a *spec delta* is only the subset of that change
+that is App behaviour. Everything else lives in commit messages + `docs/`.
 
-If a proposal's "Modified Capabilities" section is empty after this
-filter, that's fine — the change is still recorded; it just doesn't
-need to mutate the canonical spec tree.
+If a change has no App-behaviour delta at all — e.g. a PR that only
+adds a release pipeline + Fly config — skip OpenSpec entirely for that
+change. The git history + `docs/` are sufficient. OpenSpec is for
+specifying behaviour, not recording every PR.
 
 ## Patterns
 
