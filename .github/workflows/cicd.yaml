@@ -19,6 +19,9 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  # publish-npm uses npm provenance (--provenance) which mints a signed
+  # OIDC token from GitHub and attests the build. Needs id-token: write.
+  id-token: write
 
 jobs:
   test:
@@ -80,3 +83,25 @@ jobs:
       - run: flyctl deploy --remote-only --config fly.prod.toml -a openspec-flow
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN_PROD }}
+
+  publish-npm:
+    needs: [release]
+    if: ${{ needs.release.outputs.released }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: publish-npm
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+      - run: npm ci
+      - run: npm run build
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
