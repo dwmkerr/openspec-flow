@@ -22,16 +22,23 @@ Because a composite action runs inside the caller's job, it SHALL inherit the ca
 - **WHEN** the caller invokes the composite action
 - **THEN** the agent runs against the default Anthropic endpoint with no behavior change
 
-### Requirement: Composite action forwards a curated config allowlist
+### Requirement: Composite action inherits the caller's job environment
 
-The composite action SHALL forward a curated set of Anthropic configuration variables from the caller's job env to the dispatch step, each referenced explicitly (`${{ env.<NAME> }}`): at minimum `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, and `ANTHROPIC_CUSTOM_HEADERS`. It SHALL NOT blind-spread the entire caller environment.
+The composite action's steps run inside the caller's job and share its environment. Any variable the caller sets in the job `env` is therefore available to the dispatch step and to the Agent SDK it runs, with no per-variable declaration in the action. This covers `ANTHROPIC_BASE_URL`, `ANTHROPIC_CUSTOM_HEADERS`, model overrides, and any other variable the SDK reads.
 
-#### Scenario: Custom headers forwarded
+Credentials MAY be supplied either as the `anthropic_api_key` / `claude_code_oauth_token` inputs or via the corresponding job env var; when both are absent for a given name, the input SHALL NOT overwrite an inherited value with an empty string.
+
+#### Scenario: Custom headers inherited
 
 - **GIVEN** a caller job that sets `env: ANTHROPIC_CUSTOM_HEADERS`
 - **WHEN** the composite action dispatches
 - **THEN** the dispatch step receives `ANTHROPIC_CUSTOM_HEADERS`
-- **AND** unrelated caller env vars outside the allowlist are not forwarded by openspec-flow's own env block
+
+#### Scenario: Env-supplied credential is not clobbered
+
+- **GIVEN** a caller job that sets `env: ANTHROPIC_API_KEY` and passes no `anthropic_api_key` input
+- **WHEN** the composite action dispatches
+- **THEN** the dispatch step still sees the inherited `ANTHROPIC_API_KEY`
 
 ### Requirement: Composite action owns App-token minting
 

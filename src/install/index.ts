@@ -51,13 +51,13 @@ const renderDetections = (d: Detections): string[] => {
 const renderSecrets = (s: SecretProbe): string[] => {
   const lines: string[] = [chalk.bold("Secrets")];
   if (!s.available) {
-    lines.push(`  ${symbols.noop} ANTHROPIC_API_KEY ${chalk.dim(`— check skipped (${s.reason})`)}`);
+    lines.push(`  ${symbols.noop} ANTHROPIC_API_KEY / CLAUDE_CODE_OAUTH_TOKEN ${chalk.dim(`— check skipped (${s.reason})`)}`);
     return lines;
   }
   if (s.anthropic === "present") {
-    lines.push(`  ${symbols.ok} ANTHROPIC_API_KEY ${chalk.dim("— set on repo")}`);
+    lines.push(`  ${symbols.ok} ANTHROPIC_API_KEY / CLAUDE_CODE_OAUTH_TOKEN ${chalk.dim("— set on repo")}`);
   } else {
-    lines.push(`  ${symbols.fail} ANTHROPIC_API_KEY ${chalk.yellow("— missing; set before merging the setup PR")}`);
+    lines.push(`  ${symbols.fail} ANTHROPIC_API_KEY / CLAUDE_CODE_OAUTH_TOKEN ${chalk.yellow("— missing; set one before merging the setup PR")}`);
   }
   return lines;
 };
@@ -87,8 +87,9 @@ const renderSecretCommands = (s: SecretProbe): string[] => {
   return [
     "",
     chalk.bold("Set the required secret"),
-    chalk.dim("  run this (install does not write to the repo):"),
-    `  ${chalk.cyan(`gh secret set ANTHROPIC_API_KEY`)}  ${chalk.dim("# Setup Anthropic key")}`,
+    chalk.dim("  run one of these (install does not write to the repo):"),
+    `  ${chalk.cyan(`gh secret set ANTHROPIC_API_KEY`)}        ${chalk.dim("# Anthropic API key")}`,
+    `  ${chalk.cyan(`gh secret set CLAUDE_CODE_OAUTH_TOKEN`)}  ${chalk.dim("# or a Claude subscription token")}`,
   ];
 };
 
