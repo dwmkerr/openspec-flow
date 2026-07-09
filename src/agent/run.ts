@@ -25,16 +25,25 @@ export interface RunAgentOpts {
   options?: Partial<Options>;
 }
 
+// The SDK authenticates with `ANTHROPIC_API_KEY` (x-api-key header) or
+// `ANTHROPIC_AUTH_TOKEN` (Authorization bearer, used by gateways). Either
+// is sufficient; the run only fails when both are absent.
+export const assertAnthropicCredentials = (
+  env: NodeJS.ProcessEnv = process.env,
+): void => {
+  if (!env.ANTHROPIC_API_KEY && !env.ANTHROPIC_AUTH_TOKEN) {
+    throw new Error(
+      "No Anthropic credential set. Set ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN in .env or your environment.",
+    );
+  }
+};
+
 // Returns the final assistant text from the `SDKResultMessage`.
-// Throws on missing API key, on `result.is_error`, and on any error
+// Throws on missing credentials, on `result.is_error`, and on any error
 // the SDK surfaces. Streaming side-effect: every yielded chunk is
 // printed via `opts.log.info(formatChunkPreview(chunk))`.
 export const runAgent = async (opts: RunAgentOpts): Promise<string> => {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error(
-      "ANTHROPIC_API_KEY is not set. Add it to .env or your environment.",
-    );
-  }
+  assertAnthropicCredentials();
 
   const sdkOptions: Options = {
     ...(opts.systemPrompt ? { systemPrompt: opts.systemPrompt } : {}),

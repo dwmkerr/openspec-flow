@@ -108,7 +108,10 @@ export const probeSecrets = (cwd: string): SecretProbe => {
     );
     return {
       available: true,
-      anthropic: names.has("ANTHROPIC_API_KEY") ? "present" : "absent",
+      anthropic:
+        names.has("ANTHROPIC_API_KEY") || names.has("CLAUDE_CODE_OAUTH_TOKEN")
+          ? "present"
+          : "absent",
     };
   } catch {
     return { available: false, reason: "gh secret list failed (no remote or unauth?)", anthropic: "unknown" };

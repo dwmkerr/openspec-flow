@@ -60,97 +60,30 @@ jobs:
       contents: write
       pull-requests: write
       issues: write
-      # Required for the OIDC broker step — without it, the runner
-      # does not inject ACTIONS_ID_TOKEN_REQUEST_TOKEN/URL and the
-      # curl step fails with `unbound variable`. The caller (shim)
-      # also needs id-token: write at its own permissions block;
-      # the shim template ships with it.
+      # Required for the OIDC broker path — without it, the runner does
+      # not inject ACTIONS_ID_TOKEN_REQUEST_TOKEN/URL. The caller (shim)
+      # also needs id-token: write at its own permissions block; the
+      # shim template ships with it.
       id-token: write
-    env:
-      # Surface the App id so the conditional token step can gate on it.
-      OPENSPEC_FLOW_APP_ID: ${{ secrets.OPENSPEC_FLOW_APP_ID }}
     steps:
-      # Mint an App token, preferring (in order):
-      #   1. OIDC broker exchange — no App secrets in target repo.
-      #      Requires OPENSPEC_FLOW_BROKER_URL repo/org variable and
-      #      `id-token: write` permission (shim ships with both).
-      #   2. Legacy APP_ID + PRIVATE_KEY secrets — older shims.
-      # If neither is configured, falls back to GITHUB_TOKEN below
-      # (which can't push workflow files — see init PR body).
-      # Broker URL resolution (highest priority wins):
-      #   1. vars.OPENSPEC_FLOW_BROKER_URL — per-repo (or per-org) override
-      #   2. inputs.broker_url — set in the shim at install time (Probot
-      #      bakes its public URL in when the install handler runs)
-      #   3. reusable workflow's own default (workflow_call input default)
-      - name: Mint App token (OIDC broker)
-        id: broker-token
-        if: ${{ vars.OPENSPEC_FLOW_BROKER_URL != '' || inputs.broker_url != '' }}
-        run: |
-          set -euo pipefail
-          ID_TOKEN=$(curl -sS \
-            -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${BROKER_AUDIENCE}" \
-            | jq -r .value)
-          RESP=$(curl -sS -X POST \
-            -H "Authorization: Bearer ${ID_TOKEN}" \
-            "${BROKER_URL}/api/token")
-          APP_TOKEN=$(echo "$RESP" | jq -r .token)
-          if [[ "$APP_TOKEN" == "null" || -z "$APP_TOKEN" ]]; then
-            echo "broker rejected token request: $RESP" >&2
-            exit 1
-          fi
-          echo "::add-mask::$APP_TOKEN"
-          echo "token=$APP_TOKEN" >> "$GITHUB_OUTPUT"
-        env:
-          BROKER_URL: ${{ vars.OPENSPEC_FLOW_BROKER_URL || inputs.broker_url }}
-          BROKER_AUDIENCE: ${{ vars.OPENSPEC_FLOW_BROKER_AUDIENCE || inputs.broker_audience }}
-
-      - name: Mint App token (legacy secrets)
-        id: app-token
-        if: ${{ vars.OPENSPEC_FLOW_BROKER_URL == '' && inputs.broker_url == '' && env.OPENSPEC_FLOW_APP_ID != '' }}
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ secrets.OPENSPEC_FLOW_APP_ID }}
-          private-key: ${{ secrets.OPENSPEC_FLOW_PRIVATE_KEY }}
-
-      # Check out openspec-flow at the exact ref the shim pinned.
-      # job_workflow_sha resolves the reusable workflow's own commit,
-      # keeping the runtime code version-coherent with the shim's @ref.
+      # Check out openspec-flow at the exact ref the shim pinned, so the
+      # local composite action (`./`) runs the same code version.
+      # job_workflow_sha resolves the reusable workflow's own commit.
       - name: Checkout openspec-flow
         uses: actions/checkout@v4
         with:
           repository: dwmkerr/openspec-flow
           ref: ${{ github.job_workflow_sha }}
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      # Delegate the pipeline to the composite action. The token-mint
+      # priority chain (broker → legacy → GITHUB_TOKEN) lives there now;
+      # behavior is unchanged for shim consumers.
+      - name: Run openspec-flow
+        uses: ./
         with:
-          node-version: 22
-          cache: npm
-
-      - name: Build
-        run: |
-          npm ci
-          npm run build
-
-      # Handlers shell out to the Fission `openspec` CLI (new change,
-      # validate, archive). It is a separate binary from openspec-flow
-      # and from the repo's committed openspec-* skills, so the runner
-      # must install it explicitly.
-      - name: Install OpenSpec CLI
-        run: npm i -g @fission-ai/openspec
-
-      - name: Dispatch
-        run: node dist/cli.js dispatch
-        env:
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-          # GITHUB_EVENT_PATH is set automatically by the runner.
-          # Priority: broker (OIDC, no secrets) → legacy App secret → GITHUB_TOKEN.
-          OPENSPEC_FLOW_TOKEN: ${{ steps.broker-token.outputs.token || steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
-          GITHUB_TOKEN: ${{ steps.broker-token.outputs.token || steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          # True when either the broker minted an installation token
-          # or the legacy App-secret path produced one. Surfaces in
-          # the lifecycle sticky's footer — when false, the comment
-          # carries an install hint pointing at the App.
-          OPENSPEC_FLOW_APP_INSTALLED: ${{ (steps.broker-token.outputs.token != '' || steps.app-token.outputs.token != '') && 'true' || 'false' }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          app_id: ${{ secrets.OPENSPEC_FLOW_APP_ID }}
+          private_key: ${{ secrets.OPENSPEC_FLOW_PRIVATE_KEY }}
+          broker_url: ${{ inputs.broker_url }}
+          broker_audience: ${{ inputs.broker_audience }}
