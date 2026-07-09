@@ -113,14 +113,15 @@ runs:
         # Priority: broker (OIDC, no secrets), then App secret, then github_token.
         OPENSPEC_FLOW_TOKEN: ${{ steps.broker-token.outputs.token || steps.app-token.outputs.token || inputs.github_token }}
         GITHUB_TOKEN: ${{ steps.broker-token.outputs.token || steps.app-token.outputs.token || inputs.github_token }}
-        # Credentials. Either is sufficient; a gateway may supply a bearer
-        # token via the ambient ANTHROPIC_AUTH_TOKEN env instead.
-        ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key }}
-        CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude_code_oauth_token }}
-        # Config passthrough from the caller's job env. The Agent SDK reads
-        # these directly; openspec-flow adds no routing logic. Curated
-        # allowlist — the whole caller env is NOT forwarded.
-        ANTHROPIC_BASE_URL: ${{ env.ANTHROPIC_BASE_URL }}
-        ANTHROPIC_AUTH_TOKEN: ${{ env.ANTHROPIC_AUTH_TOKEN }}
-        ANTHROPIC_CUSTOM_HEADERS: ${{ env.ANTHROPIC_CUSTOM_HEADERS }}
+        # Credentials: take the `with:` input, or fall back to the same var
+        # set on the caller's job env. Either ANTHROPIC_API_KEY or
+        # ANTHROPIC_AUTH_TOKEN is sufficient (a gateway supplies the bearer
+        # token). The || fallback avoids clobbering an env-supplied value
+        # with an empty input.
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key || env.ANTHROPIC_API_KEY }}
+        CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude_code_oauth_token || env.CLAUDE_CODE_OAUTH_TOKEN }}
+        # Everything else the agent reads (ANTHROPIC_BASE_URL,
+        # ANTHROPIC_AUTH_TOKEN, ANTHROPIC_CUSTOM_HEADERS, model overrides,
+        # timeouts, ...) is inherited automatically: composite action steps
+        # share the caller job's environment. Setting it on the job is enough.
         OPENSPEC_FLOW_APP_INSTALLED: ${{ (steps.broker-token.outputs.token != '' || steps.app-token.outputs.token != '') && 'true' || 'false' }}

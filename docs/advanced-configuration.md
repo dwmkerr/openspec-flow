@@ -55,9 +55,11 @@ jobs:
           broker_url: https://openspec-flow.fly.dev
 ```
 
-The agent runs with either `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN`, so a gateway that uses a bearer token needs no API key. The action forwards `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_CUSTOM_HEADERS` from the job `env`.
+The agent runs with either `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN`, so a gateway that uses a bearer token needs no API key.
 
-One thing to know: `env` only reaches the agent when the job calls the action directly. The reusable workflow does not pass it through, so setting `env` on a shim that still calls the reusable workflow has no effect. Calling the action, as above, is what makes it work.
+Anything you set in the job `env` reaches the agent, not just these keys. The action's steps run in your job and share its environment, so any variable the Agent SDK understands works the same way: `ANTHROPIC_BASE_URL`, `ANTHROPIC_CUSTOM_HEADERS`, model overrides, timeouts, and so on.
+
+One thing to know: this only works when the job calls the action directly. The reusable workflow runs as its own job and does not share your `env`, so setting `env` on a shim that still calls the reusable workflow has no effect. Calling the action, as above, is what makes it work.
 
 ## Inputs
 
