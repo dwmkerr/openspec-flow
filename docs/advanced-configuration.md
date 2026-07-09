@@ -1,25 +1,12 @@
 # Advanced configuration
 
-openspec-flow ships two ways to consume it. Pick by how much control you need.
+openspec-flow ships as both a reusable workflow and an action. The reusable workflow is the drop-in path: the App writes a shim that calls it, and there is nothing to configure. The action gives you more control. You call it from your own job, so you can set anything the job allows, including `env`. That is how you point the agent at a different Anthropic endpoint, such as an AI gateway.
 
-## Consumption modes
+Most repos want the reusable workflow. Reach for the action when you need to change how the agent talks to Anthropic.
 
-| Mode | How | Config surface |
-| --- | --- | --- |
-| **Reusable workflow** (drop-in) | The App PRs a shim, or you copy it. The shim `uses:` the reusable workflow. | Credentials + App identity only. No per-repo agent config. |
-| **Composite action** (advanced) | Author your own job and `uses: dwmkerr/openspec-flow@<ref>`. | Anything you set in the job `env:` — gateway base URL, bearer token, custom headers, model overrides. |
+## Start from the shim
 
-Most repos want the reusable workflow — one file, nothing to tune. Reach for the composite action only when you need to change how the agent talks to Anthropic.
-
-## Why the shim can't carry advanced config
-
-The shim calls a **reusable workflow** (`uses: …/openspec-flow.yml@<ref>`). Environment does **not** cross the `workflow_call` boundary: a job `env:` you set in the shim is invisible to the reusable workflow it calls. Setting `env: ANTHROPIC_BASE_URL` on the shim does nothing.
-
-A **composite action** runs as a step inside your job, so it inherits your job `env:`. That is the only path that gets configuration passthrough. To configure the agent you therefore **replace the shim with a composite-direct job** — you do not edit the shim.
-
-## Composite-direct example: a corporate gateway
-
-Route agent traffic through an internal Anthropic gateway instead of `api.anthropic.com`:
+The shim that `openspec-flow init` writes (or that the App opens a PR for) is a normal workflow file. Use it as a starting point and edit it. To add configuration, change the job so it calls the action directly:
 
 ```yaml
 name: openspec-flow
@@ -37,37 +24,56 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
-  id-token: write        # required for the OIDC broker token path
+  id-token: write
 
 jobs:
   flow:
     runs-on: ubuntu-latest
-    env:
-      # Config passthrough — the composite action forwards these to the Agent SDK.
-      ANTHROPIC_BASE_URL: https://gateway.internal.example.com/anthropic
-      ANTHROPIC_AUTH_TOKEN: ${{ secrets.GATEWAY_TOKEN }}   # bearer auth
-      # ANTHROPIC_CUSTOM_HEADERS: "x-team: platform"       # optional
     steps:
       - uses: dwmkerr/openspec-flow@<ref>
         with:
-          # No anthropic_api_key needed — the gateway authenticates via
-          # ANTHROPIC_AUTH_TOKEN above. Provide App identity as usual:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           broker_url: https://openspec-flow.fly.dev
-          # app_id / private_key: only for the legacy App-secret path
 ```
 
-Notes:
+This behaves the same as the reusable workflow. It is just written out so you can add to it.
 
-- **Credentials.** The agent runs when either `ANTHROPIC_API_KEY` (x-api-key) or `ANTHROPIC_AUTH_TOKEN` (bearer) is present. Gateways typically use the bearer token.
-- **`id-token: write` is yours to grant.** A composite action cannot grant job permissions. Without it, the OIDC broker path silently falls back to the legacy App-secret path or `GITHUB_TOKEN`.
-- **Forwarded env is a curated allowlist**: `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_CUSTOM_HEADERS`. The whole job env is not forwarded.
+## Example: route through an AI gateway
 
-## Action inputs
+Set the endpoint and credential in `env`. The action forwards them to the agent:
+
+```yaml
+jobs:
+  flow:
+    runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_BASE_URL: https://gateway.internal.example.com/anthropic
+      ANTHROPIC_AUTH_TOKEN: ${{ secrets.GATEWAY_TOKEN }}
+    steps:
+      - uses: dwmkerr/openspec-flow@<ref>
+        with:
+          broker_url: https://openspec-flow.fly.dev
+```
+
+The agent runs with either `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN`, so a gateway that uses a bearer token needs no API key. The action forwards `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_CUSTOM_HEADERS` from the job `env`.
+
+One thing to know: `env` only reaches the agent when the job calls the action directly. The reusable workflow does not pass it through, so setting `env` on a shim that still calls the reusable workflow has no effect. Calling the action, as above, is what makes it work.
+
+## Inputs
 
 | Input | Purpose |
 | --- | --- |
-| `anthropic_api_key` | Anthropic API key (x-api-key). Optional if a credential is supplied via env. |
-| `claude_code_oauth_token` | Claude Code subscription token, alternative to the API key. |
+| `anthropic_api_key` | Anthropic API key. Optional if you supply a credential through `env`. |
+| `claude_code_oauth_token` | Claude Code subscription token, an alternative to the API key. |
 | `github_token` | Token used when no App identity is minted. Defaults to the job `GITHUB_TOKEN`. |
-| `app_id` / `private_key` | GitHub App identity (legacy path). |
-| `broker_url` / `broker_audience` | OIDC token broker settings. The `OPENSPEC_FLOW_BROKER_URL` repo/org variable overrides `broker_url`. |
+| `app_id`, `private_key` | GitHub App identity for the secret-based path (see below). |
+| `broker_url`, `broker_audience` | OIDC token broker settings. The `OPENSPEC_FLOW_BROKER_URL` repo or org variable overrides `broker_url`. |
+
+## App identity
+
+openspec-flow acts with the App's identity to push branches and open PRs. There are two ways to get an App token:
+
+- Broker. The runner exchanges a GitHub OIDC token for a short-lived App token through the openspec-flow broker. Nothing sensitive is stored in your repo. This needs `id-token: write` on the job.
+- Secrets. You store the App id and private key as repo secrets (`OPENSPEC_FLOW_APP_ID`, `OPENSPEC_FLOW_PRIVATE_KEY`) and the action mints a token from them. This is the older path, kept as a fallback. The broker replaced it so you no longer have to distribute the private key.
+
+If neither is set, the action falls back to `GITHUB_TOKEN`, which cannot push changes under `.github/workflows`.

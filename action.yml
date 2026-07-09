@@ -33,10 +33,10 @@ inputs:
     required: false
     default: ${{ github.token }}
   app_id:
-    description: GitHub App id for bot identity (optional, legacy path).
+    description: GitHub App id for bot identity (optional, secret-based path).
     required: false
   private_key:
-    description: GitHub App private key for bot identity (optional, legacy path).
+    description: GitHub App private key for bot identity (optional, secret-based path).
     required: false
   broker_url:
     description: OIDC token broker URL. The `OPENSPEC_FLOW_BROKER_URL` repo/org variable overrides this.
@@ -50,9 +50,9 @@ inputs:
 runs:
   using: composite
   steps:
-    # Mint an App token, preferring: OIDC broker → legacy App secrets →
-    # github_token fallback. Broker URL resolution (highest priority wins):
-    # vars.OPENSPEC_FLOW_BROKER_URL → inputs.broker_url.
+    # Mint an App token, preferring the OIDC broker, then the App-secret
+    # path, then the github_token fallback. Broker URL resolution (highest
+    # priority wins): vars.OPENSPEC_FLOW_BROKER_URL, then inputs.broker_url.
     - name: Mint App token (OIDC broker)
       id: broker-token
       if: ${{ vars.OPENSPEC_FLOW_BROKER_URL != '' || inputs.broker_url != '' }}
@@ -110,7 +110,7 @@ runs:
       run: node "${{ github.action_path }}/dist/cli.js" dispatch
       env:
         GITHUB_EVENT_NAME: ${{ github.event_name }}
-        # Priority: broker (OIDC, no secrets) → legacy App secret → github_token.
+        # Priority: broker (OIDC, no secrets), then App secret, then github_token.
         OPENSPEC_FLOW_TOKEN: ${{ steps.broker-token.outputs.token || steps.app-token.outputs.token || inputs.github_token }}
         GITHUB_TOKEN: ${{ steps.broker-token.outputs.token || steps.app-token.outputs.token || inputs.github_token }}
         # Credentials. Either is sufficient; a gateway may supply a bearer

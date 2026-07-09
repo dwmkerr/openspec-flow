@@ -76,7 +76,7 @@ jobs:
           ref: ${{ github.job_workflow_sha }}
 
       # Delegate the pipeline to the composite action. The token-mint
-      # priority chain (broker → legacy → GITHUB_TOKEN) lives there now;
+      # priority chain (broker, then App secret, then GITHUB_TOKEN) lives there now;
       # behavior is unchanged for shim consumers.
       - name: Run openspec-flow
         uses: ./
