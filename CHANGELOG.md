@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/dwmkerr/openspec-flow/compare/v0.1.0...v0.2.0) (2026-07-09)
+
+
+### Features
+
+* composite action with Anthropic config passthrough ([#103](https://github.com/dwmkerr/openspec-flow/issues/103)) ([7f09553](https://github.com/dwmkerr/openspec-flow/commit/7f09553e5a07f3fac303a15ff16624d091e6a608))
+
+
+### Documentation
+
+* propose composite-action packaging for env passthrough ([#102](https://github.com/dwmkerr/openspec-flow/issues/102)) ([67f1c89](https://github.com/dwmkerr/openspec-flow/commit/67f1c898423236bf740464bf7e24817c3ad3de64))
+
 ## 0.1.0 (2026-06-17)
 
 
