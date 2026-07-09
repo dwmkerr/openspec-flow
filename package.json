@@ -1,6 +1,6 @@
 {
   "name": "@dwmkerr/openspec-flow",
-  "version": "0.2.0",
+  "version": "0.1.4",
   "description": "Drive OpenSpec spec-driven development from GitHub issues. Open the issue, get a spec PR. Merge it, get an implementation PR.",
   "license": "MIT",
   "private": false,

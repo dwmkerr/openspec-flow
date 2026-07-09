@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.4](https://github.com/dwmkerr/openspec-flow/compare/v0.2.0...v0.1.4) (2026-07-09)
+
+
+### Features
+
+* publish to npm on release ([#101](https://github.com/dwmkerr/openspec-flow/issues/101)) ([b097bae](https://github.com/dwmkerr/openspec-flow/commit/b097bae6d0da95a7b96f2cc374d632a0241a597a))
+
+
+### Build
+
+* pin pre-1.0 feature releases to the 0.1.x patch line ([#106](https://github.com/dwmkerr/openspec-flow/issues/106)) ([f2d2892](https://github.com/dwmkerr/openspec-flow/commit/f2d2892dbb97f449880135baff2d2737caa30eb8))
+
 ## [0.2.0](https://github.com/dwmkerr/openspec-flow/compare/v0.1.0...v0.2.0) (2026-07-09)
 
 
