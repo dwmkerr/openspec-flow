@@ -16,6 +16,10 @@
     ".github/actions",
     ".github/workflows/openspec-flow.yml"
   ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "tsc && node scripts/copy-assets.mjs",
     "build:watch": "tsc -w",
