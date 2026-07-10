@@ -38,12 +38,17 @@ inputs:
   private_key:
     description: GitHub App private key for bot identity (optional, secret-based path).
     required: false
-  broker_url:
-    description: OIDC token broker URL. The `OPENSPEC_FLOW_BROKER_URL` repo/org variable overrides this.
+  oidc_broker_url:
+    description: >
+      OIDC token broker URL. Exchanges the runner's GitHub OIDC token for
+      the openspec-flow[bot] App token (no App private key in your repo).
+      Point at your own self-hosted broker to control the minting infra.
+      Empty (default) skips the broker and runs as github-actions[bot].
+      The `OPENSPEC_FLOW_BROKER_URL` repo/org variable overrides this.
     required: false
     default: ''
-  broker_audience:
-    description: The `aud` claim the broker requires on the OIDC token.
+  oidc_broker_audience:
+    description: The `aud` claim the broker requires on the OIDC token. Only used when a broker URL is set.
     required: false
     default: 'openspec-flow'
 
@@ -51,11 +56,12 @@ runs:
   using: composite
   steps:
     # Mint an App token, preferring the OIDC broker, then the App-secret
-    # path, then the github_token fallback. Broker URL resolution (highest
-    # priority wins): vars.OPENSPEC_FLOW_BROKER_URL, then inputs.broker_url.
+    # path, then the github_token fallback. The broker only runs when a URL
+    # is set (via the OPENSPEC_FLOW_BROKER_URL variable or oidc_broker_url);
+    # otherwise the flow runs as github-actions[bot].
     - name: Mint App token (OIDC broker)
       id: broker-token
-      if: ${{ vars.OPENSPEC_FLOW_BROKER_URL != '' || inputs.broker_url != '' }}
+      if: ${{ vars.OPENSPEC_FLOW_BROKER_URL != '' || inputs.oidc_broker_url != '' }}
       shell: bash
       run: |
         set -euo pipefail
@@ -68,18 +74,22 @@ runs:
           "${BROKER_URL}/api/token")
         APP_TOKEN=$(echo "$RESP" | jq -r .token)
         if [[ "$APP_TOKEN" == "null" || -z "$APP_TOKEN" ]]; then
-          echo "broker rejected token request: $RESP" >&2
+          echo "openspec-flow OIDC broker at ${BROKER_URL} did not return a token." >&2
+          echo "The openspec-flow App is likely not installed on this repo." >&2
+          echo "Install it (https://github.com/apps/openspec-flow), or unset the" >&2
+          echo "OPENSPEC_FLOW_BROKER_URL variable / oidc_broker_url input to run as" >&2
+          echo "github-actions[bot]. Broker response: $RESP" >&2
           exit 1
         fi
         echo "::add-mask::$APP_TOKEN"
         echo "token=$APP_TOKEN" >> "$GITHUB_OUTPUT"
       env:
-        BROKER_URL: ${{ vars.OPENSPEC_FLOW_BROKER_URL || inputs.broker_url }}
-        BROKER_AUDIENCE: ${{ vars.OPENSPEC_FLOW_BROKER_AUDIENCE || inputs.broker_audience }}
+        BROKER_URL: ${{ vars.OPENSPEC_FLOW_BROKER_URL || inputs.oidc_broker_url }}
+        BROKER_AUDIENCE: ${{ vars.OPENSPEC_FLOW_BROKER_AUDIENCE || inputs.oidc_broker_audience }}
 
     - name: Mint App token (legacy secrets)
       id: app-token
-      if: ${{ vars.OPENSPEC_FLOW_BROKER_URL == '' && inputs.broker_url == '' && inputs.app_id != '' }}
+      if: ${{ vars.OPENSPEC_FLOW_BROKER_URL == '' && inputs.oidc_broker_url == '' && inputs.app_id != '' }}
       uses: actions/create-github-app-token@v1
       with:
         app-id: ${{ inputs.app_id }}

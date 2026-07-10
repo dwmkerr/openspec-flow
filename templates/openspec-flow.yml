@@ -26,6 +26,12 @@ permissions:
   # files).
   id-token: write
 jobs:
+  # Identity: by default openspec-flow runs as github-actions[bot] (via
+  # GITHUB_TOKEN) — fine to try it out, but it cannot push changes under
+  # .github/workflows/. For openspec-flow[bot] identity, install the App
+  # (https://github.com/apps/openspec-flow) and set the
+  # OPENSPEC_FLOW_BROKER_URL variable, or add a `with:` block setting
+  # oidc-broker-url. See the docs for details.
   flow:
     uses: dwmkerr/openspec-flow/.github/workflows/openspec-flow.yml@main
     secrets:

@@ -39,7 +39,7 @@ export interface AppInitOpts {
   // commits automatically. The planner runs with `force: true` so it
   // overwrites managed regions instead of leaving them alone.
   force?: boolean;
-  // Bake a `broker_url:` input into the rendered shim so target
+  // Bake an `oidc_broker_url:` input into the rendered shim so target
   // repos use this URL for OIDC token exchange by default. Falls back
   // to `OPENSPEC_FLOW_BROKER_PUBLIC_URL` env when omitted (set on the
   // Probot host so install-time installs auto-point at the host's

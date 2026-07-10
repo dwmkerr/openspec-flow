@@ -47,6 +47,9 @@ export interface PlanOptions {
   // OIDC audience required by the broker at brokerUrl. Bundled with
   // brokerUrl so each broker target gets the right audience too.
   brokerAudience?: string;
+  // Pin the rendered shim's `@ref` (e.g. `v0.1.5`). Unset uses the
+  // template's default ref.
+  ref?: string;
 }
 
 const WORKFLOW_REL = ".github/workflows/openspec-flow.yml";
@@ -54,6 +57,7 @@ const README_REL = "README.md";
 
 const planWorkflow = (state: FsState, opts: PlanOptions): Action => {
   const target = renderWorkflow({
+    ref: opts.ref,
     brokerUrl: opts.brokerUrl,
     brokerAudience: opts.brokerAudience,
   });

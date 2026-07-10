@@ -17,11 +17,13 @@ export interface InstallOptions {
   cwd: string;
   force: boolean;
   yes: boolean;
-  // Bake a `broker_url:` input into the rendered shim. Power users
-  // testing against a non-default broker (Fly dev, self-hosted) can
-  // pass it explicitly; unset = falls through to the reusable
-  // workflow's default at run time.
+  // Bake an `oidc_broker_url:` input into the rendered shim for
+  // openspec-flow[bot] identity. Unset = the shim runs as
+  // github-actions[bot].
   brokerUrl?: string;
+  // Pin the generated shim's `@ref`. The CLI passes `v<version>`;
+  // unset falls back to the template's default ref.
+  ref?: string;
 }
 
 const symbols = {
@@ -170,7 +172,7 @@ export const runInstall = (opts: InstallOptions): number => {
 
   const fs = readState(opts.cwd);
   const state = { cwd: opts.cwd, ...fs };
-  const actions = plan(state, { force: opts.force, brokerUrl: opts.brokerUrl });
+  const actions = plan(state, { force: opts.force, brokerUrl: opts.brokerUrl, ref: opts.ref });
 
   log(chalk.bold("Plan"));
   actions.forEach((a) => log(renderAction(a)));
