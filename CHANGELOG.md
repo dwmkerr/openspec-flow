@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.5](https://github.com/dwmkerr/openspec-flow/compare/v0.1.4...v0.1.5) (2026-07-10)
+
+
+### Features
+
+* make App identity opt-in, rename broker_url -&gt; oidc_broker_url ([#107](https://github.com/dwmkerr/openspec-flow/issues/107)) ([9eeec99](https://github.com/dwmkerr/openspec-flow/commit/9eeec99d41802f093f46e7f541f61de28448d832))
+
 ## [0.1.4](https://github.com/dwmkerr/openspec-flow/compare/v0.2.0...v0.1.4) (2026-07-09)
 
 
