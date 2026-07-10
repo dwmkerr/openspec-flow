@@ -33,10 +33,10 @@ jobs:
       - uses: dwmkerr/openspec-flow@<ref>
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          broker_url: https://openspec-flow.fly.dev
+          # For openspec-flow[bot] identity add: oidc_broker_url: https://openspec-flow.fly.dev
 ```
 
-This behaves the same as the reusable workflow. It is just written out so you can add to it.
+This behaves the same as the reusable workflow (runs as github-actions[bot]). It is just written out so you can add to it — see Identity below to run as openspec-flow[bot].
 
 ## Example: route through an AI gateway
 
@@ -51,8 +51,6 @@ jobs:
       ANTHROPIC_AUTH_TOKEN: ${{ secrets.GATEWAY_TOKEN }}
     steps:
       - uses: dwmkerr/openspec-flow@<ref>
-        with:
-          broker_url: https://openspec-flow.fly.dev
 ```
 
 The agent runs with either `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN`, so a gateway that uses a bearer token needs no API key.
@@ -69,13 +67,15 @@ One thing to know: this only works when the job calls the action directly. The r
 | `claude_code_oauth_token` | Claude Code subscription token, an alternative to the API key. |
 | `github_token` | Token used when no App identity is minted. Defaults to the job `GITHUB_TOKEN`. |
 | `app_id`, `private_key` | GitHub App identity for the secret-based path (see below). |
-| `broker_url`, `broker_audience` | OIDC token broker settings. The `OPENSPEC_FLOW_BROKER_URL` repo or org variable overrides `broker_url`. |
+| `oidc_broker_url`, `oidc_broker_audience` | OIDC token broker settings (see Identity below). Empty by default. The `OPENSPEC_FLOW_BROKER_URL` repo or org variable overrides `oidc_broker_url`. |
 
-## App identity
+## Identity
 
-openspec-flow acts with the App's identity to push branches and open PRs. There are two ways to get an App token:
+By default openspec-flow runs as **github-actions[bot]** using the job's `GITHUB_TOKEN`. That is enough to try it out, but `GITHUB_TOKEN` cannot push changes under `.github/workflows/`, and its pushes do not trigger downstream workflows.
 
-- Broker. The runner exchanges a GitHub OIDC token for a short-lived App token through the openspec-flow broker. Nothing sensitive is stored in your repo. This needs `id-token: write` on the job.
-- Secrets. You store the App id and private key as repo secrets (`OPENSPEC_FLOW_APP_ID`, `OPENSPEC_FLOW_PRIVATE_KEY`) and the action mints a token from them. This is the older path, kept as a fallback. The broker replaced it so you no longer have to distribute the private key.
+For **openspec-flow[bot]** identity, give the flow an App token. Two ways:
 
-If neither is set, the action falls back to `GITHUB_TOKEN`, which cannot push changes under `.github/workflows`.
+- **Broker (recommended).** Set `oidc_broker_url` (or the `OPENSPEC_FLOW_BROKER_URL` variable). The runner exchanges its GitHub OIDC token for a short-lived App token through the broker — no App private key in your repo. Needs `id-token: write` on the job. Run your own broker deployment and point `oidc_broker_url` at it to keep token minting on infrastructure you control; `oidc_broker_audience` sets the `aud` claim it expects.
+- **Secrets.** Store the App id and private key as repo secrets (`OPENSPEC_FLOW_APP_ID`, `OPENSPEC_FLOW_PRIVATE_KEY`). The older path, kept as a fallback — the broker replaced it so you no longer distribute the private key.
+
+The OIDC provider is always GitHub Actions; the broker only accepts the runner's GitHub-issued token. `oidc_broker_url` selects the broker deployment, not a different identity provider.

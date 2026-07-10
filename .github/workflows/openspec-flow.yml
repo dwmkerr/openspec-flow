@@ -22,23 +22,23 @@
 on:
   workflow_call:
     inputs:
-      broker_url:
+      oidc_broker_url:
         description: |
-          OIDC token broker URL. The shim is rendered with the URL of the
-          Probot host that ran the install (Fly dev, Fly prod, or omitted
-          for local-dev installs that should use the default below).
-          Repo override path: set the `OPENSPEC_FLOW_BROKER_URL` Actions
-          variable; that wins over this input.
+          OIDC token broker URL. The broker exchanges the runner's GitHub
+          OIDC token for the openspec-flow[bot] App token, so no App
+          private key is stored in your repo. Point this at your own
+          self-hosted broker deployment to keep App-token minting on infra
+          you control. Empty (the default) skips the broker and the flow
+          runs as github-actions[bot]. The `OPENSPEC_FLOW_BROKER_URL`
+          Actions variable overrides this input.
         type: string
         required: false
-        default: 'https://openspec-flow.fly.dev'
-      broker_audience:
+        default: ''
+      oidc_broker_audience:
         description: |
-          The `aud` claim the broker requires on the OIDC token. Must
-          match `OPENSPEC_FLOW_BROKER_AUDIENCE` on the Probot host that
-          will accept the token. Set at install time by `runAppInit`
-          from the Probot's own audience env, so dev / prod brokers
-          each get their own.
+          The `aud` claim the broker requires on the OIDC token. Must match
+          `OPENSPEC_FLOW_BROKER_AUDIENCE` on the broker host. Only used when
+          oidc_broker_url (or the OPENSPEC_FLOW_BROKER_URL variable) is set.
         type: string
         required: false
         default: 'openspec-flow'
@@ -85,5 +85,5 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           app_id: ${{ secrets.OPENSPEC_FLOW_APP_ID }}
           private_key: ${{ secrets.OPENSPEC_FLOW_PRIVATE_KEY }}
-          broker_url: ${{ inputs.broker_url }}
-          broker_audience: ${{ inputs.broker_audience }}
+          oidc_broker_url: ${{ inputs.oidc_broker_url }}
+          oidc_broker_audience: ${{ inputs.oidc_broker_audience }}

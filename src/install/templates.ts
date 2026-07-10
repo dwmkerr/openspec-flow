@@ -42,15 +42,14 @@ const USES_LINE_FOLLOWED_BY_SECRETS =
 
 export interface RenderWorkflowOptions {
   ref?: string;
-  // When set, the rendered shim carries `with: broker_url: <url>` so
-  // the reusable workflow uses this URL for OIDC token exchange. Omit
-  // for local-dev installs that should fall through to the reusable
-  // workflow's default. Repo-level `vars.OPENSPEC_FLOW_BROKER_URL`
-  // still overrides this if a power user sets it.
+  // When set, the rendered shim carries `with: oidc_broker_url: <url>` so
+  // the flow mints an openspec-flow[bot] App token via that broker. Omit
+  // to run as github-actions[bot]. Repo-level `vars.OPENSPEC_FLOW_BROKER_URL`
+  // still overrides this if set.
   brokerUrl?: string;
   // Audience the broker requires on the OIDC token. Must match the
-  // Probot host's `OPENSPEC_FLOW_BROKER_AUDIENCE`. Baked alongside
-  // `broker_url` so dev / prod brokers each get their own audience.
+  // broker host's `OPENSPEC_FLOW_BROKER_AUDIENCE`. Baked alongside
+  // `oidc_broker_url` so dev / prod brokers each get their own audience.
   brokerAudience?: string;
 }
 
@@ -71,8 +70,8 @@ export const renderWorkflow = (
     // 4 spaces to match the existing `secrets:` indentation. Both
     // broker inputs share one block; either may be omitted.
     const lines: string[] = ["    with:"];
-    if (opts.brokerUrl) lines.push(`      broker_url: '${opts.brokerUrl}'`);
-    if (opts.brokerAudience) lines.push(`      broker_audience: '${opts.brokerAudience}'`);
+    if (opts.brokerUrl) lines.push(`      oidc_broker_url: '${opts.brokerUrl}'`);
+    if (opts.brokerAudience) lines.push(`      oidc_broker_audience: '${opts.brokerAudience}'`);
     const withBlock = lines.join("\n") + "\n";
     content = content.replace(
       USES_LINE_FOLLOWED_BY_SECRETS,

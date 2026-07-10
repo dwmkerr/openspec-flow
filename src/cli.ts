@@ -180,7 +180,7 @@ export const runCli = async (argv: string[]): Promise<number> => {
     .option("--yes", "skip interactive prompts")
     .option("--force", "overwrite the managed README block when markers are present")
     .option("--path <dir>", "target directory", ".")
-    .option("--broker <url>", "bake an OIDC broker URL into the shim's `with: broker_url:`. Omit to let the reusable workflow use its hardcoded default.")
+    .option("--broker <url>", "bake an OIDC broker URL into the shim's `with: oidc_broker_url:` for openspec-flow[bot] identity. Omit to run as github-actions[bot].")
     .action(async (opts) => {
       const { runInstall } = await import("./install/index.js");
       code = runInstall({
@@ -188,6 +188,8 @@ export const runCli = async (argv: string[]): Promise<number> => {
         force: !!opts.force,
         yes: !!opts.yes,
         brokerUrl: opts.broker,
+        // Pin the generated shim to this release, not @main.
+        ref: `v${pkg.version}`,
       });
     });
 

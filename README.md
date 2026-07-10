@@ -37,6 +37,10 @@ npx @dwmkerr/openspec-flow install
 
 Feedback on issues and pull requests happens during the workflow run, so updates lag by ~30 seconds while the runner spins up. The CLI explains how to create the three contract labels (`openspec:go`, `openspec:spec`, `openspec:impl`) and how to set the required Anthropic API key secret. Same workflow, same flow.
 
+### Identity
+
+By default the flow runs as **github-actions[bot]** using the job's `GITHUB_TOKEN` — enough to try it out, but it can't push changes under `.github/workflows/`. For **openspec-flow[bot]** identity, install the App (above), or set `oidc_broker_url` / the `OPENSPEC_FLOW_BROKER_URL` variable to mint an App token via the OIDC broker. See [advanced configuration](./docs/advanced-configuration.md#identity).
+
 ## How it works
 
 A single sticky comment lives on the issue, mirrored to every PR raised for the flow. It updates as the agent works so you always know where you are and what to do next.
