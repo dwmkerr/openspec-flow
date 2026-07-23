@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.7](https://github.com/dwmkerr/openspec-flow/compare/v0.1.6...v0.1.7) (2026-07-23)
+
+
+### Bug Fixes
+
+* disable invalid composite action cache path ([#111](https://github.com/dwmkerr/openspec-flow/issues/111)) ([4dfc6e6](https://github.com/dwmkerr/openspec-flow/commit/4dfc6e62088583a9c99579eb61ccd51581bd59c5))
+
 ## [0.1.6](https://github.com/dwmkerr/openspec-flow/compare/v0.1.5...v0.1.6) (2026-07-23)
 
 
