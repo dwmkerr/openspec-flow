@@ -37,6 +37,14 @@ describe("GitHub action manifests", () => {
     expect(legacy.if).toBe("${{ inputs.oidc_broker_url == '' && inputs.app_id != '' }}");
   });
 
+  it("does not give setup-node an unnormalised local-action cache path", () => {
+    const action = readYaml("action.yml");
+    const setupNode = namedStep(action.runs?.steps, "Setup Node");
+
+    expect(setupNode.with?.cache).toBeUndefined();
+    expect(setupNode.with?.["cache-dependency-path"]).toBeUndefined();
+  });
+
   it("resolves repo variables in the reusable workflow before invoking the action", () => {
     const workflow = readYaml(".github/workflows/openspec-flow.yml");
     const run = namedStep(workflow.jobs?.flow.steps, "Run openspec-flow");

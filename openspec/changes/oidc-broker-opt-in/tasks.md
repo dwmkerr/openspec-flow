@@ -22,6 +22,7 @@
 - [x] 4.1 Update `templates.test.ts` for the renamed key.
 - [x] 4.2 typecheck + full test suite + build green.
 - [x] 4.3 Resolve repo/org broker variables in the reusable workflow, keep unsupported `vars` references out of the composite manifest, and add manifest regression coverage.
+- [x] 4.4 Remove setup-node caching from the composite action so local `uses: ./` consumers do not pass a `/.//package-lock.json` path that setup-node rejects.
 
 ## 5. Verification (runtime — ark E2E)
 
