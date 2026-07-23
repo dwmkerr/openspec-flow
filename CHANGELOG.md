@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.6](https://github.com/dwmkerr/openspec-flow/compare/v0.1.5...v0.1.6) (2026-07-23)
+
+
+### Bug Fixes
+
+* resolve broker variables before composite action ([#109](https://github.com/dwmkerr/openspec-flow/issues/109)) ([202b12e](https://github.com/dwmkerr/openspec-flow/commit/202b12e96c4971646f79d10ddb3ca8c3115710e4))
+
 ## [0.1.5](https://github.com/dwmkerr/openspec-flow/compare/v0.1.4...v0.1.5) (2026-07-10)
 
 
