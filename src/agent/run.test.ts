@@ -1,6 +1,12 @@
 import { assertAnthropicCredentials } from "./run.js";
 
 describe("assertAnthropicCredentials", () => {
+  it("passes with only CLAUDE_CODE_OAUTH_TOKEN set", () => {
+    expect(() =>
+      assertAnthropicCredentials({ CLAUDE_CODE_OAUTH_TOKEN: "oauth-test" }),
+    ).not.toThrow();
+  });
+
   it("passes with only ANTHROPIC_API_KEY set", () => {
     expect(() =>
       assertAnthropicCredentials({ ANTHROPIC_API_KEY: "sk-test" }),
@@ -13,9 +19,9 @@ describe("assertAnthropicCredentials", () => {
     ).not.toThrow();
   });
 
-  it("throws naming both variables when neither is set", () => {
+  it("throws naming every supported variable when none is set", () => {
     expect(() => assertAnthropicCredentials({})).toThrow(
-      /ANTHROPIC_API_KEY.*ANTHROPIC_AUTH_TOKEN/,
+      /CLAUDE_CODE_OAUTH_TOKEN.*ANTHROPIC_API_KEY.*ANTHROPIC_AUTH_TOKEN/,
     );
   });
 });

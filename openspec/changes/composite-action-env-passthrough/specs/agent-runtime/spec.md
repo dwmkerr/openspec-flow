@@ -2,11 +2,17 @@
 
 ## MODIFIED Requirements
 
-### Requirement: Agent run accepts either an API key or a bearer auth token
+### Requirement: Agent run accepts OAuth, API-key, or bearer authentication
 
-The agent runtime SHALL permit the agent to run when **either** `ANTHROPIC_API_KEY` **or** `ANTHROPIC_AUTH_TOKEN` is present in the environment. It SHALL fail with an actionable error only when **both** are absent. The error message SHALL name both variables.
+The agent runtime SHALL permit the agent to run when `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_API_KEY`, or `ANTHROPIC_AUTH_TOKEN` is present in the environment. It SHALL fail with an actionable error only when all three are absent. The error message SHALL name every supported variable.
 
-This supports gateways that authenticate with a bearer token (`ANTHROPIC_AUTH_TOKEN`, sent as an `Authorization` header by the Agent SDK) in place of an API key (`ANTHROPIC_API_KEY`, sent as `x-api-key`).
+This supports Claude Code subscription authentication (`CLAUDE_CODE_OAUTH_TOKEN`) and gateways that authenticate with a bearer token (`ANTHROPIC_AUTH_TOKEN`) in place of an API key (`ANTHROPIC_API_KEY`).
+
+#### Scenario: Claude Code OAuth token only
+
+- **GIVEN** `CLAUDE_CODE_OAUTH_TOKEN` is set and the API-key and gateway-token variables are unset
+- **WHEN** the agent runs
+- **THEN** the run proceeds and the SDK authenticates with the Claude subscription token
 
 #### Scenario: Bearer token only
 
@@ -20,11 +26,11 @@ This supports gateways that authenticate with a bearer token (`ANTHROPIC_AUTH_TO
 - **WHEN** the agent runs
 - **THEN** the run proceeds unchanged from prior behavior
 
-#### Scenario: Neither credential present
+#### Scenario: No credential present
 
-- **GIVEN** neither `ANTHROPIC_API_KEY` nor `ANTHROPIC_AUTH_TOKEN` is set
+- **GIVEN** none of `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_API_KEY`, or `ANTHROPIC_AUTH_TOKEN` is set
 - **WHEN** the agent runs
-- **THEN** it throws an error naming both variables
+- **THEN** it throws an error naming all three variables
 
 ## ADDED Requirements
 

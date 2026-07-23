@@ -64,10 +64,10 @@ fly secrets set -a openspec-flow-dev ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
 flyctl deploy --remote-only --config fly.dev.toml -a openspec-flow-dev
 ```
 
-> Prod does NOT need `ANTHROPIC_API_KEY`. In Action mode (the prod
+> Prod does not need a Claude credential. In Action mode (the prod
 > default, set in `fly.prod.toml`), the Fly host never invokes
 > Claude — the agent runs on the target repo's GitHub Actions runner
-> using the user's own `ANTHROPIC_API_KEY` Actions secret.
+> using `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` from that repo.
 
 > Note on `PRIVATE_KEY_PATH`: the existing code reads the private key
 > from a file at `PRIVATE_KEY_PATH`. The simplest way to wire that on

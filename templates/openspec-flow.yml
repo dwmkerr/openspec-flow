@@ -35,6 +35,9 @@ jobs:
   flow:
     uses: dwmkerr/openspec-flow/.github/workflows/openspec-flow.yml@main
     secrets:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      # Set exactly one Claude credential. CLAUDE_CODE_OAUTH_TOKEN is the
+      # consistent subscription-auth name; ANTHROPIC_API_KEY remains supported.
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN || '' }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY || '' }}
       OPENSPEC_FLOW_APP_ID: ${{ secrets.OPENSPEC_FLOW_APP_ID || '' }}
       OPENSPEC_FLOW_PRIVATE_KEY: ${{ secrets.OPENSPEC_FLOW_PRIVATE_KEY || '' }}

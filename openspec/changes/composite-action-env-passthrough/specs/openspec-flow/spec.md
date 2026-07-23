@@ -8,6 +8,15 @@ The reusable workflow SHALL delegate the agent pipeline to the root composite ac
 
 Drop-in consumers that call the reusable workflow via the shim SHALL observe no behavioral change: the same token-mint priority chain (broker → legacy App secrets → `GITHUB_TOKEN`) applies, and the same dispatch environment is produced. The relocation of the mint steps into the composite action SHALL be transparent to shim consumers.
 
+The reusable workflow SHALL declare both `CLAUDE_CODE_OAUTH_TOKEN` and `ANTHROPIC_API_KEY` as optional secrets and forward them to the composite action. A generated shim SHALL pass both optional secret names so a repository can standardise on either credential without changing the workflow structure. Exactly one Claude credential is sufficient.
+
+#### Scenario: Shim authenticates with a Claude Code OAuth token
+
+- **GIVEN** a generated shim whose repository defines `CLAUDE_CODE_OAUTH_TOKEN` and not `ANTHROPIC_API_KEY`
+- **WHEN** the reusable workflow dispatches the agent
+- **THEN** it forwards the OAuth token to the composite action
+- **AND** the agent credential guard permits the run
+
 #### Scenario: Shim consumer unaffected by the refactor
 
 - **GIVEN** a target repo using the shim template unchanged

@@ -6,7 +6,7 @@
 
 The PR body opened by `runAppInit` SHALL contain a section that names the three Actions secrets the workflow requires, with the exact `gh secret set` commands (filled in with the target repo) the user must run before the first `openspec:go`:
 
-- `ANTHROPIC_API_KEY` — Anthropic API key for the agent.
+- `CLAUDE_CODE_OAUTH_TOKEN` (recommended) or `ANTHROPIC_API_KEY` — exactly one Claude credential for the agent.
 - `OPENSPEC_FLOW_APP_ID` — App id for bot identity.
 - `OPENSPEC_FLOW_PRIVATE_KEY` — App private key for bot identity.
 
@@ -17,7 +17,7 @@ The body SHALL explain the consequence of skipping the App secrets — namely th
 #### Scenario: PR body names every secret command
 
 - **WHEN** an init PR opens for `owner/repo`
-- **THEN** the PR body contains the substring `gh secret set ANTHROPIC_API_KEY`
+- **THEN** the PR body contains the substring `gh secret set CLAUDE_CODE_OAUTH_TOKEN`
 - **AND** the PR body contains the substring `OPENSPEC_FLOW_APP_ID`
 - **AND** the PR body contains the substring `OPENSPEC_FLOW_PRIVATE_KEY`
 - **AND** the PR body references `owner/repo`

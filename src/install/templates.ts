@@ -105,7 +105,7 @@ This repo uses [openspec-flow](https://github.com/dwmkerr/openspec-flow) to driv
 3. openspec-flow opens a **spec PR** (\`openspec:spec\`). Review, comment, iterate (add \`openspec:go\` to the PR to re-run). Merge when happy.
 4. openspec-flow opens an **impl PR** (\`openspec:impl\`). Review, iterate, merge. The originating issue closes automatically.
 
-Required Actions secret: \`ANTHROPIC_API_KEY\`.
+Required Actions secret: \`CLAUDE_CODE_OAUTH_TOKEN\` (recommended) or \`ANTHROPIC_API_KEY\`. Set exactly one.
 ${README_MARKER_END}`;
 
 export const renderMinimalReadme = (repoName: string, remote?: string | null): string => {

@@ -90,8 +90,8 @@ const renderSecretCommands = (s: SecretProbe): string[] => {
     "",
     chalk.bold("Set the required secret"),
     chalk.dim("  run one of these (install does not write to the repo):"),
-    `  ${chalk.cyan(`gh secret set ANTHROPIC_API_KEY`)}        ${chalk.dim("# Anthropic API key")}`,
-    `  ${chalk.cyan(`gh secret set CLAUDE_CODE_OAUTH_TOKEN`)}  ${chalk.dim("# or a Claude subscription token")}`,
+    `  ${chalk.cyan(`gh secret set CLAUDE_CODE_OAUTH_TOKEN`)}  ${chalk.dim("# Claude subscription token (recommended)")}`,
+    `  ${chalk.cyan(`gh secret set ANTHROPIC_API_KEY`)}        ${chalk.dim("# or an Anthropic API key")}`,
   ];
 };
 

@@ -31,7 +31,7 @@
 
 ## 5. Init-PR body honesty (App secrets)
 
-- [x] 5.1 `runAppInit` PR body lists the three secrets (`ANTHROPIC_API_KEY`, `OPENSPEC_FLOW_APP_ID`, `OPENSPEC_FLOW_PRIVATE_KEY`) with `gh secret set` commands.
+- [x] 5.1 `runAppInit` PR body lists one Claude credential (`CLAUDE_CODE_OAUTH_TOKEN` recommended, `ANTHROPIC_API_KEY` supported) plus the two App-identity secrets with `gh secret set` commands.
 - [x] 5.2 Body notes the org-secret option for `OPENSPEC_FLOW_PRIVATE_KEY`.
 - [x] 5.3 Body explains the `GITHUB_TOKEN` fallback constraint (no `.github/workflows/*` writes).
 - [x] 5.4 Body links forward to the OIDC broker RFC (#79).
