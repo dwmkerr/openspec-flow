@@ -44,7 +44,6 @@ inputs:
       the openspec-flow[bot] App token (no App private key in your repo).
       Point at your own self-hosted broker to control the minting infra.
       Empty (default) skips the broker and runs as github-actions[bot].
-      The `OPENSPEC_FLOW_BROKER_URL` repo/org variable overrides this.
     required: false
     default: ''
   oidc_broker_audience:
@@ -56,12 +55,12 @@ runs:
   using: composite
   steps:
     # Mint an App token, preferring the OIDC broker, then the App-secret
-    # path, then the github_token fallback. The broker only runs when a URL
-    # is set (via the OPENSPEC_FLOW_BROKER_URL variable or oidc_broker_url);
-    # otherwise the flow runs as github-actions[bot].
+    # path, then the github_token fallback. The composite action can only
+    # read declared inputs; the reusable workflow resolves repo/org vars
+    # before calling it. No URL means the github-actions[bot] fallback.
     - name: Mint App token (OIDC broker)
       id: broker-token
-      if: ${{ vars.OPENSPEC_FLOW_BROKER_URL != '' || inputs.oidc_broker_url != '' }}
+      if: ${{ inputs.oidc_broker_url != '' }}
       shell: bash
       run: |
         set -euo pipefail
@@ -84,12 +83,12 @@ runs:
         echo "::add-mask::$APP_TOKEN"
         echo "token=$APP_TOKEN" >> "$GITHUB_OUTPUT"
       env:
-        BROKER_URL: ${{ vars.OPENSPEC_FLOW_BROKER_URL || inputs.oidc_broker_url }}
-        BROKER_AUDIENCE: ${{ vars.OPENSPEC_FLOW_BROKER_AUDIENCE || inputs.oidc_broker_audience }}
+        BROKER_URL: ${{ inputs.oidc_broker_url }}
+        BROKER_AUDIENCE: ${{ inputs.oidc_broker_audience }}
 
     - name: Mint App token (legacy secrets)
       id: app-token
-      if: ${{ vars.OPENSPEC_FLOW_BROKER_URL == '' && inputs.oidc_broker_url == '' && inputs.app_id != '' }}
+      if: ${{ inputs.oidc_broker_url == '' && inputs.app_id != '' }}
       uses: actions/create-github-app-token@v1
       with:
         app-id: ${{ inputs.app_id }}

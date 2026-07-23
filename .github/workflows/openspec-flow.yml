@@ -85,5 +85,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           app_id: ${{ secrets.OPENSPEC_FLOW_APP_ID }}
           private_key: ${{ secrets.OPENSPEC_FLOW_PRIVATE_KEY }}
-          oidc_broker_url: ${{ inputs.oidc_broker_url }}
-          oidc_broker_audience: ${{ inputs.oidc_broker_audience }}
+          # Composite action metadata cannot access the caller's `vars`
+          # context, so resolve repo/org overrides in this workflow.
+          oidc_broker_url: ${{ vars.OPENSPEC_FLOW_BROKER_URL || inputs.oidc_broker_url }}
+          oidc_broker_audience: ${{ vars.OPENSPEC_FLOW_BROKER_AUDIENCE || inputs.oidc_broker_audience }}

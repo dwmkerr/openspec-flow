@@ -4,7 +4,7 @@
 
 ### Requirement: Bot identity is github-actions[bot] by default, App identity is opt-in
 
-The reusable workflow SHALL run as github-actions[bot] (using `GITHUB_TOKEN`) unless an OIDC broker URL is configured. The broker input SHALL be named `oidc_broker_url` (audience: `oidc_broker_audience`) and SHALL default to empty. The broker token-mint step SHALL run only when `oidc_broker_url` is non-empty or the `OPENSPEC_FLOW_BROKER_URL` variable is set; otherwise it SHALL be skipped and the flow SHALL proceed with `GITHUB_TOKEN`.
+The reusable workflow SHALL run as github-actions[bot] (using `GITHUB_TOKEN`) unless an OIDC broker URL is configured. The broker input SHALL be named `oidc_broker_url` (audience: `oidc_broker_audience`) and SHALL default to empty. The reusable workflow SHALL resolve `OPENSPEC_FLOW_BROKER_URL` and `OPENSPEC_FLOW_BROKER_AUDIENCE` repo/org variables before passing the resulting values to the composite action. The broker token-mint step SHALL run only when the resolved `oidc_broker_url` is non-empty; otherwise it SHALL be skipped and the flow SHALL proceed with `GITHUB_TOKEN`.
 
 A repo that has the App installed and its broker URL baked into the shim (by `app-install`) SHALL continue to mint an App token unchanged. No shim SHALL need to set `oidc_broker_url: ''` to run as github-actions[bot].
 
