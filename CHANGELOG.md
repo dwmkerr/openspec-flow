@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.8](https://github.com/dwmkerr/openspec-flow/compare/v0.1.7...v0.1.8) (2026-07-23)
+
+
+### Features
+
+* support Claude Code OAuth in reusable workflow ([#113](https://github.com/dwmkerr/openspec-flow/issues/113)) ([675fbbb](https://github.com/dwmkerr/openspec-flow/commit/675fbbb154d9e32919213ff430207a4cdb8dfed3))
+
 ## [0.1.7](https://github.com/dwmkerr/openspec-flow/compare/v0.1.6...v0.1.7) (2026-07-23)
 
 
