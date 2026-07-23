@@ -219,7 +219,7 @@ describe("runAppInit", () => {
       { dryRun: false },
     );
     const body = octokit.pulls.create.mock.calls[0][0].body as string;
-    expect(body).toContain("gh secret set ANTHROPIC_API_KEY");
+    expect(body).toContain("gh secret set CLAUDE_CODE_OAUTH_TOKEN");
     expect(body).toContain("OPENSPEC_FLOW_APP_ID");
     expect(body).toContain("OPENSPEC_FLOW_PRIVATE_KEY");
     expect(body).toContain("o/r");

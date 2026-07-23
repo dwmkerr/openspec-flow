@@ -5,6 +5,9 @@ describe("renderWorkflow", () => {
     const out = renderWorkflow();
     expect(out).not.toContain("oidc_broker_url:");
     expect(out).toContain("uses: dwmkerr/openspec-flow/.github/workflows/openspec-flow.yml");
+    expect(out).toContain(
+      "CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN || '' }}",
+    );
   });
 
   it("injects `with: oidc_broker_url:` when a broker URL is provided", () => {

@@ -25,15 +25,18 @@ export interface RunAgentOpts {
   options?: Partial<Options>;
 }
 
-// The SDK authenticates with `ANTHROPIC_API_KEY` (x-api-key header) or
-// `ANTHROPIC_AUTH_TOKEN` (Authorization bearer, used by gateways). Either
-// is sufficient; the run only fails when both are absent.
+// The SDK authenticates with a Claude Code OAuth token, an Anthropic API
+// key (x-api-key header), or a gateway bearer token. Any one is sufficient.
 export const assertAnthropicCredentials = (
   env: NodeJS.ProcessEnv = process.env,
 ): void => {
-  if (!env.ANTHROPIC_API_KEY && !env.ANTHROPIC_AUTH_TOKEN) {
+  if (
+    !env.CLAUDE_CODE_OAUTH_TOKEN &&
+    !env.ANTHROPIC_API_KEY &&
+    !env.ANTHROPIC_AUTH_TOKEN
+  ) {
     throw new Error(
-      "No Anthropic credential set. Set ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN in .env or your environment.",
+      "No Claude credential set. Set CLAUDE_CODE_OAUTH_TOKEN, ANTHROPIC_API_KEY, or ANTHROPIC_AUTH_TOKEN in .env or your environment.",
     );
   }
 };

@@ -66,7 +66,7 @@ jobs:
   flow:
     uses: dwmkerr/openspec-flow/.github/workflows/openspec-flow.yml@v1
     secrets:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       OPENSPEC_FLOW_APP_ID: ${{ secrets.OPENSPEC_FLOW_APP_ID }}
       OPENSPEC_FLOW_PRIVATE_KEY: ${{ secrets.OPENSPEC_FLOW_PRIVATE_KEY }}
 ```

@@ -32,7 +32,7 @@ jobs:
     steps:
       - uses: dwmkerr/openspec-flow@<ref>
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # For openspec-flow[bot] identity add: oidc_broker_url: https://openspec-flow.fly.dev
 ```
 
@@ -53,7 +53,7 @@ jobs:
       - uses: dwmkerr/openspec-flow@<ref>
 ```
 
-The agent runs with either `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN`, so a gateway that uses a bearer token needs no API key.
+The agent runs with `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_API_KEY`, or `ANTHROPIC_AUTH_TOKEN`, so a Claude subscription or a gateway bearer token needs no API key.
 
 Anything you set in the job `env` reaches the agent, not just these keys. The action's steps run in your job and share its environment, so any variable the Agent SDK understands works the same way: `ANTHROPIC_BASE_URL`, `ANTHROPIC_CUSTOM_HEADERS`, model overrides, timeouts, and so on.
 

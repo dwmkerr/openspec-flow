@@ -12,11 +12,13 @@
 - [x] 2.1 Refactor `.github/workflows/openspec-flow.yml` to `uses: ./` the composite action, passing resolved credential/identity inputs.
 - [x] 2.2 Keep `on: workflow_call`, job `permissions` (contents/PR/issues write + `id-token: write`), and runner in the wrapper.
 - [x] 2.3 Wrapper checks out openspec-flow at `github.job_workflow_sha` so `./` runs the pinned code version; token priority and dispatch env preserved.
+- [x] 2.4 Declare optional `CLAUDE_CODE_OAUTH_TOKEN` and `ANTHROPIC_API_KEY` workflow secrets, forward both to the composite, and emit both names in generated shims.
 
 ## 3. Agent credential guard
 
 - [x] 3.1 `src/agent/run.ts`: extract `assertAnthropicCredentials`; fail only when both `ANTHROPIC_API_KEY` and `ANTHROPIC_AUTH_TOKEN` are absent; error names both.
 - [x] 3.2 `src/agent/run.test.ts`: passes with only `ANTHROPIC_AUTH_TOKEN`; passes with only `ANTHROPIC_API_KEY`; throws naming both when absent.
+- [x] 3.3 Accept `CLAUDE_CODE_OAUTH_TOKEN` in the runtime guard and cover the OAuth-only and no-credential cases.
 
 ## 4. Installer advisory (cosmetic)
 

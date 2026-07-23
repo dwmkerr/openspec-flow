@@ -56,4 +56,13 @@ describe("GitHub action manifests", () => {
       "${{ vars.OPENSPEC_FLOW_BROKER_AUDIENCE || inputs.oidc_broker_audience }}",
     );
   });
+
+  it("forwards the standard Claude Code OAuth secret to the action", () => {
+    const workflow = readYaml(".github/workflows/openspec-flow.yml");
+    const run = namedStep(workflow.jobs?.flow.steps, "Run openspec-flow");
+
+    expect(run.with?.claude_code_oauth_token).toBe(
+      "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}",
+    );
+  });
 });

@@ -43,9 +43,12 @@ on:
         required: false
         default: 'openspec-flow'
     secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        description: Claude Code OAuth token for subscription authentication.
+        required: false
       ANTHROPIC_API_KEY:
-        description: Anthropic API key for the Claude agent.
-        required: true
+        description: Anthropic API key, an alternative to the Claude Code OAuth token.
+        required: false
       OPENSPEC_FLOW_APP_ID:
         description: GitHub App id for bot identity (optional, legacy path).
         required: false
@@ -81,6 +84,7 @@ jobs:
       - name: Run openspec-flow
         uses: ./
         with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           app_id: ${{ secrets.OPENSPEC_FLOW_APP_ID }}

@@ -35,7 +35,7 @@ If you can't install the App, install the CLI and let it scaffold the same machi
 npx @dwmkerr/openspec-flow install
 ```
 
-Feedback on issues and pull requests happens during the workflow run, so updates lag by ~30 seconds while the runner spins up. The CLI explains how to create the three contract labels (`openspec:go`, `openspec:spec`, `openspec:impl`) and how to set the required Anthropic API key secret. Same workflow, same flow.
+Feedback on issues and pull requests happens during the workflow run, so updates lag by ~30 seconds while the runner spins up. The CLI explains how to create the three contract labels (`openspec:go`, `openspec:spec`, `openspec:impl`) and how to set `CLAUDE_CODE_OAUTH_TOKEN` (recommended) or `ANTHROPIC_API_KEY`. Same workflow, same flow.
 
 ### Identity
 

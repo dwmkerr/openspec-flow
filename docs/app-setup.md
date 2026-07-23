@@ -84,7 +84,7 @@ rm ~/Downloads/openspec-flow.YYYY-MM-DD.private-key.pem
 
 After this, prod is live. Subsequent updates go via the release pipeline (see [`release.md`](./release.md)); the manual `flyctl deploy` above is the escape hatch for incident response only.
 
-> Why no `ANTHROPIC_API_KEY` on prod? `fly.prod.toml` sets `OPENSPEC_FLOW_DISPATCH_MODE=action`, so the Fly host never invokes Claude — the agent runs on the target repo's GitHub Actions runner using that repo's `ANTHROPIC_API_KEY` secret. Dev sometimes flips to `in-process` for local testing, which is why dev carries the key.
+> Why no Claude credential on prod? `fly.prod.toml` sets `OPENSPEC_FLOW_DISPATCH_MODE=action`, so the Fly host never invokes Claude — the agent runs on the target repo's GitHub Actions runner using `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY`. Dev sometimes flips to `in-process` for local testing, which is why dev carries a key.
 
 ## Step 1 — register the dev App
 
@@ -148,7 +148,7 @@ Still on the App settings page:
 3. Pick **Only select repositories** → choose `dwmkerr/openspec-flow` (or whichever repo you want to test against)
 4. Click **Install**
 
-On install, the App opens a setup PR in each selected repo (branch `chore/openspec-flow-init`, title `chore: openspec-flow setup`) containing the shim workflow + README managed regions. The PR body documents the `gh secret set ANTHROPIC_API_KEY` step you need to run before merging. Re-installing on a repo that already has both the workflow file and README markers is a no-op (logged as `skipped: already-initialised`).
+On install, the App opens a setup PR in each selected repo (branch `chore/openspec-flow-init`, title `chore: openspec-flow setup`) containing the shim workflow + README managed regions. The PR body documents the recommended `gh secret set CLAUDE_CODE_OAUTH_TOKEN` step (or the API-key alternative) you need to run before merging. Re-installing on a repo that already has both the workflow file and README markers is a no-op (logged as `skipped: already-initialised`).
 
 To preview what that PR would contain against any remote repo without running the App, use the CLI:
 
