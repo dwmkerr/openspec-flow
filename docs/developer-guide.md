@@ -7,7 +7,7 @@ How to develop `openspec-flow` with a fast feedback loop. Designed for a two-ter
 ```bash
 # one-time setup
 npm install
-cp .env.example .env  # fill in APP_ID, PRIVATE_KEY, WEBHOOK_SECRET, ANTHROPIC_API_KEY
+cp .env.example .env  # fill in APP_ID, PRIVATE_KEY, WEBHOOK_SECRET, and one Claude credential (CLAUDE_CODE_OAUTH_TOKEN recommended, or ANTHROPIC_API_KEY)
 
 # every day
 npm run dev:tunnel    # terminal 1 — webhook tunnel

@@ -169,7 +169,10 @@ Open `.env` and fill in:
 APP_ID=<the App ID from step 2>
 PRIVATE_KEY_PATH=./private-key.pem
 WEBHOOK_SECRET=<the secret you generated in step 1>
-ANTHROPIC_API_KEY=sk-ant-...
+# Set exactly one Claude credential. OAuth is recommended (`claude setup-token`, ~1yr).
+CLAUDE_CODE_OAUTH_TOKEN=
+# or:
+# ANTHROPIC_API_KEY=sk-ant-...
 LOG_LEVEL=debug
 ```
 
