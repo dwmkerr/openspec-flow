@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.9](https://github.com/dwmkerr/openspec-flow/compare/v0.1.8...v0.1.9) (2026-09-10)
+
+
+### Documentation
+
+* add sponsor badge and funding metadata ([#117](https://github.com/dwmkerr/openspec-flow/issues/117)) ([bb205d6](https://github.com/dwmkerr/openspec-flow/commit/bb205d6140d692be033f71758e5fae3b6061de3f))
+
 ## [0.1.8](https://github.com/dwmkerr/openspec-flow/compare/v0.1.7...v0.1.8) (2026-07-23)
 
 
